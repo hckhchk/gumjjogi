@@ -151,6 +151,7 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 .who{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--muted)}
 .who input{width:150px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font:inherit;color:var(--ink)}
 .hall{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+.bantabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
 .hallgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .board{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg)}
 .board h3{margin:0;font-size:20px}
@@ -319,6 +320,7 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 
   <section class="hall" aria-label="명예의 전당">
     <div class="examhead"><div><h2 class="display">명예의 전당</h2><p id="hallMode">기록을 불러오는 중입니다.</p></div></div>
+    <div class="bantabs" id="banTabs" role="tablist" aria-label="반 선택"></div>
     <div class="hallgrid">
       <div class="board"><h3 class="display">🏆 최소 노트로 만점</h3><p class="bsub">찍지 않고 12문제를 모두 맞힌 노트 장면 수가 적을수록 높은 순위 (같으면 시험 횟수가 적은 순)</p><div id="boardMin"></div></div>
       <div class="board"><h3 class="display">📚 최다 학습왕</h3><p class="bsub">금쪽이에게 가르친 <b>서로 다른 장면</b>의 수 (같은 장면을 다시 가르치거나 처음부터 다시 해도 늘지 않음, 같으면 먼저 달성한 순)</p><div id="boardTeach"></div></div>
@@ -396,7 +398,18 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 /* ===== 반 전체 기록 설정 (Google 스프레드시트) =====
    SHEET_API: Apps Script 웹 앱 배포 URL을 따옴표 안에 붙여 넣으세요. 비워 두면 기기별 기록만 남습니다.
    CLASS_KEY: Code.gs의 CLASS_KEY와 같아야 합니다. */
-const SHEET_API = "https://script.google.com/macros/s/AKfycbyH8VsxBtHytFOKhe6u04dLbgvhLns_tYjZZCIjIuSU4nC9fTU9_nsD6LY-D1olBB8zJw/exec";
+const SHEET_API = "";
+/* ===== 실시간 기록 설정 (Firebase Firestore) — 이 값을 채우면 시트 대신 Firebase를 씁니다 =====
+   Firebase 콘솔 > 프로젝트 설정 > 내 앱(웹)의 firebaseConfig 객체를 그대로 붙여 넣으세요. 예:
+   const FIREBASE_CONFIG = { apiKey:"...", authDomain:"...", projectId:"...", storageBucket:"...", messagingSenderId:"...", appId:"..." }; */
+const FIREBASE_CONFIG =   apiKey: "AIzaSyAxV5sbf8Jw6JkuygfP6J0JGMP9kdRoY9U",
+  authDomain: "gumjjogi-33.firebaseapp.com",
+  databaseURL: "https://gumjjogi-33-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "gumjjogi-33",
+  storageBucket: "gumjjogi-33.firebasestorage.app",
+  messagingSenderId: "869753276292",
+  appId: "1:869753276292:web:68a1c8ba8192ec62467fd1";
+const FB_COL = "gumjjogi";
 const CLASS_KEY = "hansung33";
 const LS={get(k,d){try{const v=localStorage.getItem("gold33v5:"+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem("gold33v5:"+k,JSON.stringify(v));}catch(e){}}};
 
@@ -509,7 +522,7 @@ $("who").addEventListener("change",()=>{
   const st2= carry ? {notes,rec,taught,teachAt,attempts} : (LS.get("u:"+nw,null) || {notes:[],rec:{minNotes:null,attempts:null},taught:[],teachAt:0,attempts:0});
   notes=st2.notes; rec=st2.rec; taught=st2.taught||[]; teachAt=st2.teachAt||0; teachTotal=taught.length; attempts=st2.attempts; curWho=nw;
   LS.set("notes",notes); LS.set("rec",rec); LS.set("taught",taught); LS.set("teachAt",teachAt); LS.set("attempts",attempts); LS.set("who",nw);
-  exam=null; renderNotes(); renderExam();
+  exam=null; banSel=null; renderNotes(); renderExam();
   setTimeout(restoreFromSheet,0);
   kid("idle", nw ? `${nw} 박사님, 안녕하세요! ${notes.length?"전에 가르쳐 주신 걸 기억하고 있어요.":"자성은 처음이에요. 잘 부탁드려요!"}` : "이름을 알려 주시면 기록을 남길 수 있어요.");
   saveRecord();
@@ -523,13 +536,50 @@ function sheetPost(body){
   return fetch(SHEET_API,{method:"POST",body:JSON.stringify({key:CLASS_KEY,...body})})
     .then(r=>r.json()).catch(()=>fetch(SHEET_API,{method:"POST",mode:"no-cors",body:JSON.stringify({key:CLASS_KEY,...body})}).then(()=>({ok:true})).catch(()=>({ok:false})));
 }
-let lastScore=null, lastAt=0;
+let lastScore=null, lastAt=0, fb=null, fbT=null, fbUnsub=null;
+const FB_VER="10.12.2";
+function loadScript(src){ return new Promise((res,rej)=>{ const sc=document.createElement("script"); sc.src=src; sc.onload=res; sc.onerror=rej; document.head.appendChild(sc); }); }
+async function initFirebase(){
+  if(!window.firebase){ const base=`https://www.gstatic.com/firebasejs/${FB_VER}/`;
+    await loadScript(base+"firebase-app-compat.js"); await loadScript(base+"firebase-auth-compat.js"); await loadScript(base+"firebase-firestore-compat.js"); }
+  if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+  try{ await firebase.auth().signInAnonymously(); }catch(e){ console.warn("익명 로그인 실패",e); }
+  return firebase.firestore();
+}
+function fbSave(){
+  const u=splitWho(who()); if(!fb||!u) return;
+  clearTimeout(fbT);
+  fbT=setTimeout(()=>{
+    const ref=fb.collection(FB_COL).doc(u.id);
+    fb.runTransaction(async tx=>{
+      const snap=await tx.get(ref), cur=snap.exists?snap.data():{};
+      let mn=cur.minNotes??null, ma=cur.minAttempts??null, mt=cur.minAt||0;
+      if(rec.minNotes!=null && (mn==null || rec.minNotes<mn || (rec.minNotes===mn && rec.attempts<ma))){ mn=rec.minNotes; ma=rec.attempts; mt=rec.at||Date.now(); }
+      const union=[...new Set([...(cur.taught||[]),...taught])];
+      const tAt = union.length>(cur.teach||0) ? (teachAt||Date.now()) : (cur.teachAt||0);
+      tx.set(ref,{id:u.id,name:u.name,ban:u.id[0]+"-"+(+u.id.slice(1,3)),minNotes:mn,minAttempts:ma,minAt:mt,teach:union.length,teachAt:tAt,taught:union,
+        notes:notes.slice(0,60),attempts,lastScore,lastAt,updated:Date.now()});
+    }).catch(e=>console.warn("저장 실패",e));
+  },700);
+}
+function fbLog(w,text){ const u=splitWho(who()); if(!fb||!u) return; fb.collection(FB_COL+"_chat").add({id:u.id,name:u.name,who:w,text:String(text).slice(0,300),at:Date.now()}).catch(()=>{}); }
+async function fbRestore(){
+  const u=splitWho(who()); if(!fb||!u||notes.length||taught.length) return;
+  try{ const d=await fb.collection(FB_COL).doc(u.id).get(); if(!d.exists) return; const r=d.data();
+    notes=(r.notes||[]).filter(n=>n&&MATS[n.m]&&ENVS[n.e]); taught=r.taught||[]; teachTotal=taught.length; teachAt=r.teachAt||0;
+    rec={minNotes:r.minNotes??null,attempts:r.minAttempts??null,at:r.minAt||0}; attempts=r.attempts||0;
+    LS.set("notes",notes); LS.set("taught",taught); LS.set("rec",rec); LS.set("attempts",attempts);
+    renderNotes(); renderBoards();
+    if(notes.length) kid("happy",`${u.name} 박사님! 다른 기기에서 가르쳐 주신 ${notes.length}장면을 다시 떠올렸어요!`);
+  }catch(e){}
+}
 function sheetSave(){
+  if(fb){ fbSave(); return; }
   const u=splitWho(who()); if(!SHEET_API||!u) return;
   clearTimeout(sheetT);
   sheetT=setTimeout(()=>{ sheetPost({action:"save",id:u.id,name:u.name,minNotes:rec.minNotes,minAttempts:rec.attempts,minAt:rec.at||0,teachAt,taught,notes,attempts,lastScore,lastAt}).then(()=>loadBoard()); },900);
 }
-function sheetLog(w,text){ const u=splitWho(who()); if(!SHEET_API||!u) return; sheetPost({action:"chat",id:u.id,name:u.name,who:w,text}); }
+function sheetLog(w,text){ if(fb){ fbLog(w,text); return; } const u=splitWho(who()); if(!SHEET_API||!u) return; sheetPost({action:"chat",id:u.id,name:u.name,who:w,text}); }
 let sheetT=null, boardT=null;
 async function loadBoard(){
   if(!SHEET_API) return;
@@ -539,6 +589,7 @@ async function loadBoard(){
   catch(e){ $("hallMode").textContent="기록 저장소에 연결하지 못했어요. 인터넷 연결을 확인해 주세요."; }
 }
 async function restoreFromSheet(){
+  if(fb){ return fbRestore(); }
   const u=splitWho(who()); if(!SHEET_API||!u) return;
   if(notes.length||taught.length) return;
   try{ const j=await sheetGet({action:"get",id:u.id}); const r=j&&j.rec; if(!r) return;
@@ -561,9 +612,17 @@ function saveRecord(){
 }
 function escH(t){return String(t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 const MEDAL=["🥇","🥈","🥉"];
+let banSel=null;
+const banOf=n=>{ const m=/^(\d)(\d\d)\d\d /.exec(n||""); return m?`${m[1]}-${+m[2]}`:null; };
 function renderBoards(){
-  const rows = hallRows || Object.values(localBoard);
+  const all = hallRows || Object.values(localBoard);
   const me=who();
+  const bans=[...new Set([...all.map(r=>banOf(r.name)),banOf(me)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  if(banSel===null) banSel = banOf(me) && bans.includes(banOf(me)) ? banOf(me) : "전체";
+  if(banSel!=="전체" && !bans.includes(banSel)) banSel="전체";
+  $("banTabs").innerHTML=["전체",...bans].map(b=>`<button class="chip" role="tab" aria-pressed="${b===banSel}" data-ban="${b}">${b==="전체"?"전체":b+"반"}</button>`).join("");
+  $("banTabs").querySelectorAll("button").forEach(x=>x.onclick=()=>{ banSel=x.dataset.ban; renderBoards(); });
+  const rows = banSel==="전체" ? all : all.filter(r=>banOf(r.name)===banSel);
   const mins=rows.filter(r=>r.minNotes!=null).sort((a,b)=>a.minNotes-b.minNotes||(a.attempts||0)-(b.attempts||0)||(a.minAt||0)-(b.minAt||0)).slice(0,10);
   const tch=rows.filter(r=>r.teach>0).sort((a,b)=>b.teach-a.teach||(a.teachAt||0)-(b.teachAt||0)).slice(0,10);
   const tb=(list,cols)=> list.length ? `<table><thead><tr><th>순위</th><th>이름</th>${cols.map(c=>`<th class="n">${c[0]}</th>`).join("")}</tr></thead><tbody>${list.map((r,i)=>`<tr class="${r.name===me?"me":""}"><td>${MEDAL[i]||i+1}</td><td>${escH(r.name)}</td>${cols.map(c=>`<td class="n">${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody></table>` : `<div class="empty">아직 기록이 없어요.</div>`;
@@ -571,6 +630,16 @@ function renderBoards(){
   $("boardTeach").innerHTML=tb(tch,[["서로 다른 장면",r=>r.teach+" / "+SCENE_MAX]]);
 }
 async function initHall(){
+  if(FIREBASE_CONFIG){
+    $("hallMode").textContent="실시간 기록 서버에 연결하는 중이에요…";
+    try{ fb=await initFirebase(); }catch(e){ fb=null; $("hallMode").textContent="실시간 기록 서버에 연결하지 못했어요. 이 기기 기록만 보여요."; renderBoards(); return; }
+    fbUnsub=fb.collection(FB_COL).onSnapshot(snap=>{
+      hallRows=snap.docs.map(d=>{const r=d.data(); return {name:r.id+" "+r.name,minNotes:r.minNotes??null,attempts:r.minAttempts,minAt:r.minAt,teach:r.teach||0,teachAt:r.teachAt};});
+      $("hallMode").textContent="🔴 실시간 — 다른 박사님의 기록이 바로바로 반영돼요."; renderBoards();
+    },e=>{ $("hallMode").textContent="기록을 불러올 권한이 없어요. 선생님께 알려 주세요."; });
+    if(who()){ await fbRestore(); fbSave(); }
+    return;
+  }
   if(SHEET_API){ $("hallMode").textContent="반 전체 기록을 불러오는 중이에요…"; await loadBoard(); clearInterval(boardT); boardT=setInterval(()=>{ if(!document.hidden) loadBoard(); },15000); if(who()) restoreFromSheet(); return; }
   for(let i=0;i<20&&!(window.claude&&window.claude.use);i++) await new Promise(r=>setTimeout(r,100));
   let db=null;
