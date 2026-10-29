@@ -401,13 +401,16 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 const SHEET_API = "";
 /* ===== 실시간 기록 설정 (Firebase Firestore) — 이 값을 채우면 시트 대신 Firebase를 씁니다 =====
    Firebase 콘솔 > 프로젝트 설정 > 내 앱(웹)의 firebaseConfig 객체를 그대로 붙여 넣으세요. 예:
-   const FIREBASE_CONFIG = { apiKey: "AIzaSyAxV5sbf8Jw6JkuygfP6J0JGMP9kdRoY9U",
+   const FIREBASE_CONFIG = { apiKey:"...", authDomain:"...", projectId:"...", storageBucket:"...", messagingSenderId:"...", appId:"..." }; */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAxV5sbf8Jw6JkuygfP6J0JGMP9kdRoY9U",
   authDomain: "gumjjogi-33.firebaseapp.com",
   databaseURL: "https://gumjjogi-33-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "gumjjogi-33",
   storageBucket: "gumjjogi-33.firebasestorage.app",
   messagingSenderId: "869753276292",
-  appId: "1:869753276292:web:68a1c8ba8192ec62467fd1";
+  appId: "1:869753276292:web:68a1c8ba8192ec62467fd1"
+};
 const FB_COL = "gumjjogi";
 const CLASS_KEY = "hansung33";
 const LS={get(k,d){try{const v=localStorage.getItem("gold33v5:"+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem("gold33v5:"+k,JSON.stringify(v));}catch(e){}}};
