@@ -155,7 +155,8 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 .hallgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .board{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg)}
 .board h3{margin:0;font-size:20px}
-.bsub{margin:2px 0 10px;font-size:12px;color:var(--muted)}
+.btag{margin:2px 0 10px;font-size:14px;color:var(--ink)}
+.bsub{margin:10px 0 0;font-size:11.5px;color:var(--muted);line-height:1.5}
 .board table{width:100%;border-collapse:collapse;font-size:14px}
 .board th,.board td{padding:6px 6px;border-bottom:1px solid var(--line);text-align:left}
 .board th{font-weight:500;color:var(--muted);font-size:12px}
@@ -196,7 +197,7 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 @media (prefers-reduced-motion:reduce){.gkid .body,.docsvg .dbody{animation:none}}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:9px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
 .toast.on{opacity:1}
-@media (max-width:900px){.stage{grid-template-columns:1fr}.kid{position:static;display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:center}.kidsvg{width:150px;margin:0;grid-row:1/3}.bubble::after{display:none}}
+@media (max-width:900px){.stage{grid-template-columns:1fr}.kid{order:-1;position:sticky;top:env(safe-area-inset-top,0px);z-index:8;display:grid;grid-template-columns:76px 1fr;gap:10px;align-items:center;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(6px);padding:6px 0;margin:0 -4px}.kidsvg{width:76px;margin:0}.bubble{font-size:15px;min-height:0;padding:8px 10px}.bubble::after{display:none}.maincol .note{margin-top:0}}
 @media (prefers-reduced-motion:reduce){#kid .body,#kid .eyes{animation:none!important}*{transition:none!important}}
 </style>
 </head>
@@ -322,8 +323,8 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
     <div class="examhead"><div><h2 class="display">명예의 전당</h2><p id="hallMode">기록을 불러오는 중입니다.</p></div></div>
     <div class="bantabs" id="banTabs" role="tablist" aria-label="반 선택"></div>
     <div class="hallgrid">
-      <div class="board"><h3 class="display">🏆 최소 노트로 만점</h3><p class="bsub">찍지 않고 12문제를 모두 맞힌 노트 장면 수가 적을수록 높은 순위 (같으면 시험 횟수가 적은 순)</p><div id="boardMin"></div></div>
-      <div class="board"><h3 class="display">📚 최다 학습왕</h3><p class="bsub">금쪽이에게 가르친 <b>서로 다른 장면</b>의 수 (같은 장면을 다시 가르치거나 처음부터 다시 해도 늘지 않음, 같으면 먼저 달성한 순)</p><div id="boardTeach"></div></div>
+      <div class="board"><h3 class="display">🎯 쪽집게 교수님</h3><p class="btag">금쪽이를 만점으로 이끈 교수님</p><div id="boardMin"></div><p class="bsub">찍지 않고 12문제 만점 · 노트 장면이 적을수록 높은 순위 (같으면 시험 횟수가 적은 순)</p></div>
+      <div class="board"><h3 class="display">🔥 열정적인 교수님</h3><p class="btag">금쪽이를 가장 많이 가르친 교수님</p><div id="boardTeach"></div><p class="bsub">가르친 서로 다른 장면 수 순위 · 같은 수는 공동 순위 (같은 장면 반복, 처음부터 다시는 제외)</p></div>
     </div>
   </section>
 
@@ -626,10 +627,13 @@ function renderBoards(){
   $("banTabs").querySelectorAll("button").forEach(x=>x.onclick=()=>{ banSel=x.dataset.ban; renderBoards(); });
   const rows = banSel==="전체" ? all : all.filter(r=>banOf(r.name)===banSel);
   const mins=rows.filter(r=>r.minNotes!=null).sort((a,b)=>a.minNotes-b.minNotes||(a.attempts||0)-(b.attempts||0)||(a.minAt||0)-(b.minAt||0)).slice(0,10);
-  const tch=rows.filter(r=>r.teach>0).sort((a,b)=>b.teach-a.teach||(a.teachAt||0)-(b.teachAt||0)).slice(0,10);
-  const tb=(list,cols)=> list.length ? `<table><thead><tr><th>순위</th><th>이름</th>${cols.map(c=>`<th class="n">${c[0]}</th>`).join("")}</tr></thead><tbody>${list.map((r,i)=>`<tr class="${r.name===me?"me":""}"><td>${MEDAL[i]||i+1}</td><td>${escH(r.name)}</td>${cols.map(c=>`<td class="n">${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody></table>` : `<div class="empty">아직 기록이 없어요.</div>`;
-  $("boardMin").innerHTML=tb(mins,[["노트",r=>r.minNotes+"장면"],["시험",r=>(r.attempts||"-")+"회"]]);
-  $("boardTeach").innerHTML=tb(tch,[["서로 다른 장면",r=>r.teach+" / "+SCENE_MAX]]);
+  mins.forEach((r,i)=>r._rank=i+1);
+  const tchAll=rows.filter(r=>r.teach>0).sort((a,b)=>b.teach-a.teach||String(a.name).localeCompare(String(b.name)));
+  tchAll.forEach((r,i)=>{ r._rank = (i>0 && tchAll[i-1].teach===r.teach) ? tchAll[i-1]._rank : i+1; });
+  const tch=tchAll.filter(r=>r._rank<=10);
+  const tb=(list,cols)=> list.length ? `<table><thead><tr><th>순위</th><th>이름</th>${cols.map(c=>`<th class="n">${c[0]}</th>`).join("")}</tr></thead><tbody>${list.map((r,i)=>`<tr class="${r.name===me?"me":""}"><td>${MEDAL[r._rank-1]||r._rank}</td><td>${escH(r.name)}</td>${cols.map(c=>`<td class="n">${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody></table>` : `<div class="empty">아직 기록이 없어요.</div>`;
+  $("boardMin").innerHTML=tb(mins,[["노트 장면",r=>r.minNotes+"장면"],["시험",r=>(r.attempts||"-")+"회"]]);
+  $("boardTeach").innerHTML=tb(tch,[["가르친 장면",r=>r.teach+" / "+SCENE_MAX]]);
 }
 async function initHall(){
   if(FIREBASE_CONFIG){
@@ -654,6 +658,10 @@ async function initHall(){
   if(who()) saveRecord();
 }
 initHall();
+/* 좁은 화면(휴대폰)에서는 금쪽이 노트를 실험실 바로 아래로 옮김 */
+(function(){ const mq=window.matchMedia("(max-width:900px)"), note=document.querySelector(".kid .note")||document.querySelector(".note"), aside=document.querySelector(".kid"), lab=document.querySelector(".lab");
+  function place(){ if(!note||!aside||!lab) return; if(mq.matches){ if(note.parentElement!==lab.parentElement) lab.after(note); } else if(note.parentElement!==aside) aside.appendChild(note); }
+  place(); if(mq.addEventListener) mq.addEventListener("change",place); else if(mq.addListener) mq.addListener(place); })();
 
 /* ---------- 시작 화면 (박사님 입장) ---------- */
 (function(){
@@ -864,7 +872,7 @@ $("examBtn").onclick=()=>{
   if(s===12 && lucky===0){
     const better = rec.minNotes==null || notes.length<rec.minNotes || (notes.length===rec.minNotes && attempts<rec.attempts);
     if(better){ rec.minNotes=notes.length; rec.attempts=attempts; rec.at=Date.now(); saveRecord(); }
-    kid("happy", better ? `12문제 모두 이해했어요! 노트 ${notes.length}장면으로 통과해서 명예의 전당에 올랐어요!` : `12문제 모두 맞혔어요! 그런데 최고 기록(노트 ${rec.minNotes}장면)보다는 많이 썼어요.`, true);
+    kid("happy", better ? `12문제 모두 이해했어요! 노트 ${notes.length}장면으로 통과했어요! 박사님은 이제 쪽집게 교수님이에요!` : `12문제 모두 맞혔어요! 그런데 최고 기록(노트 ${rec.minNotes}장면)보다는 많이 썼어요.`, true);
     if(!who()) toast("명예의 전당에 이름을 올리려면 위쪽에 이름을 적어 주세요.");
   }
   else if(lucky>0) kid("thinking",`${s}개 맞혔어요! 근데 비밀인데요… ${lucky}문제는 찍어서 맞힌 거예요. 다시 보면 틀릴지도 몰라요!`,true);
@@ -896,7 +904,7 @@ function renderExam(){
 /* ---------- 금쪽이와 대화하기 ---------- */
 let chat=LS.get("chat",[]), anger=LS.get("anger",0), sampleFn=null, dl=null, busy=false;
 const BAD=/(씨\s*발|시\s*발|ㅅ\s*ㅂ|ㅆ\s*ㅂ|병\s*신|ㅂ\s*ㅅ|개\s*새|존\s*나|졸\s*라|좆|미친|꺼져|닥쳐)/g;
-const ANGRY=/(화나|화난|빡|짜증|답답|열받|바보|멍청|왜\s*틀|진짜|아오|으악|ㅡㅡ|-_-|!!|분노)/;
+const ANGRY=/(화나|화난|빡|짜증|답답|열받|바보|멍청|왜\s*틀|진짜|아오|으악|ㅡㅡ|-_-|!!|분노|자식|짜식|녀석|놈)/;
 const mask=t=>t.replace(BAD,m=>"●".repeat(Math.min(3,m.replace(/\s/g,"").length)));
 function stamp(){ const d=new Date(); return d.toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}); }
 function renderChat(){
@@ -992,6 +1000,7 @@ async function send(){
       chat.pop();
       if(e && e.code==="not_granted"){ sampleFn=null; $("aiMode").textContent="기본 대화 모드"; }
       if(e && e.code==="cooldown" || /429|quota|RESOURCE_EXHAUSTED/i.test(String(e&&e.message))) $("aiMode").textContent="AI 사용량이 잠시 가득 찼어요. 1분 동안 기본 대화로 답해요.";
+      else if(e && e.code!=="not_granted") { console.warn("AI 응답 실패",e); $("aiMode").textContent="AI 응답 실패, 기본 대화로 답했어요 ("+String((e&&e.message)||e).slice(0,80)+")"; }
       const r=scripted(t,angry); pushChat("kid",r.text); kid(r.mood,r.text);
     }finally{ busy=false; $("send").disabled=false; }
   } else {
@@ -1023,7 +1032,8 @@ const AI_SDK="12.19.0";
 const AI_MODELS=["gemini-3.1-flash-lite","gemini-3.5-flash-lite","gemini-2.5-flash-lite","gemini-2.5-flash"];
 let aiCool=0;
 async function initGeminiChat(){
-  if(!FIREBASE_CONFIG) return;
+  if(!FIREBASE_CONFIG){ $("aiMode").textContent="기본 대화 모드"; return; }
+  $("aiMode").textContent="AI 금쪽이 연결 중…";
   try{
     const appMod=await import(`https://www.gstatic.com/firebasejs/${AI_SDK}/firebase-app.js`);
     const aiMod=await import(`https://www.gstatic.com/firebasejs/${AI_SDK}/firebase-ai.js`);
@@ -1050,7 +1060,7 @@ async function initGeminiChat(){
       throw lastErr;
     };
     $("aiMode").textContent="AI 금쪽이와 대화 중 (Gemini) — 연결이 안 되면 기본 대화로 자동 전환돼요";
-  }catch(e){ console.warn("Gemini 연결 실패",e); sampleFn=null; $("aiMode").textContent="기본 대화 모드"; }
+  }catch(e){ console.warn("Gemini 연결 실패",e); sampleFn=null; $("aiMode").textContent="기본 대화 모드 (AI 연결 실패: "+String((e&&e.message)||e).slice(0,80)+")"; }
 }
 (async()=>{
   for(let i=0;i<20&&!(window.claude&&window.claude.use);i++) await new Promise(r=>setTimeout(r,100));
