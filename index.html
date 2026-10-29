@@ -991,6 +991,7 @@ async function send(){
     }catch(e){
       chat.pop();
       if(e && e.code==="not_granted"){ sampleFn=null; $("aiMode").textContent="기본 대화 모드"; }
+      if(e && e.code==="cooldown" || /429|quota|RESOURCE_EXHAUSTED/i.test(String(e&&e.message))) $("aiMode").textContent="AI 사용량이 잠시 가득 찼어요. 1분 동안 기본 대화로 답해요.";
       const r=scripted(t,angry); pushChat("kid",r.text); kid(r.mood,r.text);
     }finally{ busy=false; $("send").disabled=false; }
   } else {
@@ -1013,12 +1014,47 @@ function logText(){ return "금쪽이 33기 자성 가르치기 — 대화 기�
 $("saveLog").onclick=async()=>{
   if(!chat.length){ toast("아직 대화 기록이 없습니다."); return; }
   if(dl){ try{ await dl.save({filename:"금쪽이_대화기록.txt",data:logText()}); }catch(e){ if(e&&e.code!=="cancelled") toast("저장하지 못했습니다."); } return; }
+  try{ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([logText()],{type:"text/plain;charset=utf-8"})); a.download="금쪽이_대화기록.txt"; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1000); return; }catch(e){}
   try{ await navigator.clipboard.writeText(logText()); toast("대화 기록을 복사했습니다. 메모장 등에 붙여 넣으세요."); }
   catch(e){ toast("이 화면에서는 저장할 수 없습니다."); }
 };
+/* ---------- Gemini (Firebase AI Logic) 대화: Claude 밖(웹 게시)에서 사용 ---------- */
+const AI_SDK="12.19.0";
+const AI_MODELS=["gemini-3.1-flash-lite","gemini-3.5-flash-lite","gemini-2.5-flash-lite","gemini-2.5-flash"];
+let aiCool=0;
+async function initGeminiChat(){
+  if(!FIREBASE_CONFIG) return;
+  try{
+    const appMod=await import(`https://www.gstatic.com/firebasejs/${AI_SDK}/firebase-app.js`);
+    const aiMod=await import(`https://www.gstatic.com/firebasejs/${AI_SDK}/firebase-ai.js`);
+    const app=appMod.initializeApp(FIREBASE_CONFIG,"gumjjogi-ai");
+    const ai=aiMod.getAI(app,{backend:new aiMod.GoogleAIBackend()});
+    let order=AI_MODELS.slice(); const saved=LS.get("aiModel",null); if(saved&&order.includes(saved)) order=[saved,...order.filter(x=>x!==saved)];
+    sampleFn=async(prompt,opts={})=>{
+      if(Date.now()<aiCool) throw {code:"cooldown"};
+      let lastErr=null;
+      for(const name of order){
+        try{
+          const model=aiMod.getGenerativeModel(ai,{model:name,generationConfig:{maxOutputTokens:600,temperature:0.8}});
+          const res=await model.generateContentStream(prompt);
+          let acc=""; for await(const ch of res.stream){ acc+=ch.text(); opts.onText&&opts.onText({text:acc}); }
+          if(order[0]!==name){ order=[name,...order.filter(x=>x!==name)]; LS.set("aiModel",name); }
+          $("aiMode").textContent="AI 금쪽이와 대화 중 (Gemini) — 연결이 안 되면 기본 대화로 자동 전환돼요";
+          return {text:acc};
+        }catch(e){
+          lastErr=e; const msg=String((e&&e.message)||e);
+          if(/429|quota|RESOURCE_EXHAUSTED/i.test(msg)){ aiCool=Date.now()+60000; throw e; }
+          if(!/404|not found|NOT_FOUND|not supported|unsupported/i.test(msg)) throw e;  // 모델 이름 문제일 때만 다음 모델 시도
+        }
+      }
+      throw lastErr;
+    };
+    $("aiMode").textContent="AI 금쪽이와 대화 중 (Gemini) — 연결이 안 되면 기본 대화로 자동 전환돼요";
+  }catch(e){ console.warn("Gemini 연결 실패",e); sampleFn=null; $("aiMode").textContent="기본 대화 모드"; }
+}
 (async()=>{
   for(let i=0;i<20&&!(window.claude&&window.claude.use);i++) await new Promise(r=>setTimeout(r,100));
-  if(!(window.claude&&window.claude.use)) return;
+  if(!(window.claude&&window.claude.use)){ await initGeminiChat(); return; }
   try{ sampleFn=await window.claude.use("sample"); }catch(e){ sampleFn=null; }
   try{ dl=await window.claude.use("downloads"); }catch(e){ dl=null; }
   $("aiMode").textContent = sampleFn ? "AI 금쪽이와 대화 중 (첫 대화 때 사용 허락을 묻습니다)" : "기본 대화 모드";
