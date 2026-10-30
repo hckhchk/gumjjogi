@@ -151,6 +151,9 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 .who{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--muted)}
 .who input{width:150px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font:inherit;color:var(--ink)}
 .hall{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+.adminbar{margin:-4px 0 12px;padding:8px 12px;border-radius:8px;background:color-mix(in srgb,var(--bad) 10%,var(--surface));color:var(--bad);font-size:13px}
+.delbtn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:2px 7px;cursor:pointer;font-size:13px}
+.delbtn.armed{background:var(--bad);color:#fff;border-color:var(--bad)}
 .bantabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
 .hallgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .board{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg)}
@@ -167,6 +170,15 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 .magctl{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);flex:1;min-width:260px}
 .magctl .end{font-size:12px}
 .magctl input{flex:1;accent-color:var(--jacket);height:28px}
+.tour{position:fixed;inset:0;z-index:70}
+.tour[hidden]{display:none}
+.tour-hole{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px rgba(10,15,25,.62);outline:3px solid #FFD166;transition:all .25s;pointer-events:none}
+.tour-card{position:fixed;width:min(330px,calc(100vw - 24px));background:var(--surface);border:2px solid var(--ink);border-radius:14px;padding:12px 14px;box-shadow:0 12px 32px rgba(0,0,0,.3);transition:top .25s,left .25s}
+.tour-step{font-size:12px;color:var(--muted)}
+.tour-text{font-family:"Jua",sans-serif;font-size:18px;line-height:1.45;margin:4px 0 12px}
+.tour-text b{color:var(--jacket)}
+.tour-btns{display:flex;justify-content:space-between;align-items:center;gap:8px}
+@media (prefers-reduced-motion:reduce){.tour-hole,.tour-card{transition:none}}
 .gate{position:fixed;inset:0;z-index:60;background:radial-gradient(1200px 600px at 50% 0%,color-mix(in srgb,var(--jacket) 18%,var(--bg)),var(--bg));overflow-y:auto;padding:calc(20px + env(safe-area-inset-top,0px)) 16px calc(20px + env(safe-area-inset-bottom,0px));display:flex;align-items:flex-start;justify-content:center}
 .gate[hidden]{display:none}
 .gate-card{width:100%;max-width:760px;margin:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px 22px 26px;box-shadow:0 20px 60px rgba(0,0,0,.12);text-align:center}
@@ -187,6 +199,8 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 .gq{font-size:16px;margin:6px 0 12px}
 .gfields{display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left}
 .gfields label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
+.tlink{font-size:12px;color:var(--muted);margin-left:6px}
+.linkbtn{border:0;background:none;padding:0;color:var(--jacket);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
 .gfields input{padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font:inherit;font-size:18px;color:var(--ink)}
 .gfields input:focus{outline:2px solid var(--jacket);outline-offset:1px}
 .ghint{font-size:14px;color:var(--muted);min-height:22px;margin:10px 0 12px}
@@ -273,12 +287,20 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
     <div id="gateForm" class="gate-form">
       <p class="gq">금쪽이를 가르칠 <b>박사님</b>의 학번과 이름을 입력하세요.</p>
       <div class="gfields">
-        <label>학번<input id="gId" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="30601"></label>
+        <label><span>학번 <span class="tlink">선생님은 <button type="button" class="linkbtn" id="gTeacher">교사</button> 입력</span></span><input id="gId" maxlength="5" autocomplete="off" placeholder="30601 또는 교사"></label>
         <label>이름<input id="gName" maxlength="5" autocomplete="off" placeholder="김한성"></label>
       </div>
       <p class="ghint" id="gHint">학번 5자리(학년·반·번호)와 한글 이름을 입력하세요.</p>
       <button class="btn teach" id="gStart" disabled>금쪽이 가르치러 가기</button>
     </div>
+  </div>
+</div>
+<div id="tour" class="tour" hidden>
+  <div class="tour-hole" id="tourHole"></div>
+  <div class="tour-card" id="tourCard" role="dialog" aria-label="사용법 안내">
+    <div class="tour-step" id="tourStep"></div>
+    <p class="tour-text" id="tourText"></p>
+    <div class="tour-btns"><button class="btn ghost small" id="tourSkip">건너뛰기</button><span><button class="btn ghost small" id="tourPrev">이전</button> <button class="btn small" id="tourNext">다음</button></span></div>
   </div>
 </div>
 <main class="wrap">
@@ -287,7 +309,7 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
     <h1 class="display"><svg class="emblem" viewBox="0 0 100 100" aria-label="한성과학고 로고"><use href="#hsLogo"/></svg>금쪽이 33기 자성 가르치기</h1>
     <p>금쪽이는 직접 본 장면만 믿는 학생입니다. 실험실에서 장면을 보여 주고, 금쪽이가 자성 시험을 통과하게 도와주세요.</p>
   </div>
-  <div class="hdr-tools"><span class="who"><b id="whoText"></b> 박사님 <button class="btn ghost small" id="switchUser">박사님 바꾸기</button><input id="who" type="hidden"></span><button class="btn ghost small" id="resetAll">처음부터 다시</button></div>
+  <div class="hdr-tools"><span class="who"><b id="whoText"></b> 박사님 <button class="btn ghost small" id="switchUser">박사님 바꾸기</button><input id="who" type="hidden"></span><button class="btn ghost small" id="helpBtn">❓ 사용법</button><button class="btn ghost small" id="resetAll">처음부터 다시</button></div>
 </header>
 
 <div class="stage">
@@ -320,7 +342,8 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
   </section>
 
   <section class="hall" aria-label="명예의 전당">
-    <div class="examhead"><div><h2 class="display">명예의 전당</h2><p id="hallMode">기록을 불러오는 중입니다.</p></div></div>
+    <div class="examhead"><div><h2 class="display">명예의 전당</h2><p id="hallMode">기록을 불러오는 중입니다.</p></div><button class="btn ghost small" id="adminBtn" hidden>🔐 관리자</button></div>
+    <p class="adminbar" id="adminBar" hidden></p>
     <div class="bantabs" id="banTabs" role="tablist" aria-label="반 선택"></div>
     <div class="hallgrid">
       <div class="board"><h3 class="display">🎯 쪽집게 교수님</h3><p class="btag">금쪽이를 만점으로 이끈 교수님</p><div id="boardMin"></div><p class="bsub">찍지 않고 12문제 만점 · 노트 장면이 적을수록 높은 순위 (같으면 시험 횟수가 적은 순)</p></div>
@@ -413,6 +436,8 @@ const FIREBASE_CONFIG = {
   appId: "1:869753276292:web:68a1c8ba8192ec62467fd1"
 };
 const FB_COL = "gumjjogi";
+/* 관리자(기록 삭제) Google 계정 이메일 — 보안 규칙의 이메일과 같아야 합니다 */
+const ADMIN_EMAIL = "";
 const CLASS_KEY = "hansung33";
 const LS={get(k,d){try{const v=localStorage.getItem("gold33v5:"+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem("gold33v5:"+k,JSON.stringify(v));}catch(e){}}};
 
@@ -530,7 +555,8 @@ $("who").addEventListener("change",()=>{
   kid("idle", nw ? `${nw} 박사님, 안녕하세요! ${notes.length?"전에 가르쳐 주신 걸 기억하고 있어요.":"자성은 처음이에요. 잘 부탁드려요!"}` : "이름을 알려 주시면 기록을 남길 수 있어요.");
   saveRecord();
 });
-const splitWho=w=>{ const m=/^(\d{5}) (.+)$/.exec(w||""); return m?{id:m[1],name:m[2]}:null; };
+const splitWho=w=>{ const m=/^(\d{5}|교사) (.+)$/.exec(w||""); return m?{id:m[1]==="교사"?"교사"+m[2]:m[1],name:m[2],teacher:m[1]==="교사"}:null; };
+const dispName=r=>String(r.id).startsWith("교사")?"교사 "+r.name:r.id+" "+r.name;
 async function sheetGet(params){
   const q=new URLSearchParams({key:CLASS_KEY,...params}).toString();
   const r=await fetch(SHEET_API+"?"+q,{method:"GET"}); return r.json();
@@ -560,7 +586,7 @@ function fbSave(){
       if(rec.minNotes!=null && (mn==null || rec.minNotes<mn || (rec.minNotes===mn && rec.attempts<ma))){ mn=rec.minNotes; ma=rec.attempts; mt=rec.at||Date.now(); }
       const union=[...new Set([...(cur.taught||[]),...taught])];
       const tAt = union.length>(cur.teach||0) ? (teachAt||Date.now()) : (cur.teachAt||0);
-      tx.set(ref,{id:u.id,name:u.name,ban:u.id[0]+"-"+(+u.id.slice(1,3)),minNotes:mn,minAttempts:ma,minAt:mt,teach:union.length,teachAt:tAt,taught:union,
+      tx.set(ref,{id:u.id,name:u.name,ban:u.teacher?"교사":u.id[0]+"-"+(+u.id.slice(1,3)),minNotes:mn,minAttempts:ma,minAt:mt,teach:union.length,teachAt:tAt,taught:union,
         notes:notes.slice(0,60),attempts,lastScore,lastAt,updated:Date.now()});
     }).catch(e=>console.warn("저장 실패",e));
   },700);
@@ -586,7 +612,7 @@ function sheetLog(w,text){ if(fb){ fbLog(w,text); return; } const u=splitWho(who
 let sheetT=null, boardT=null;
 async function loadBoard(){
   if(!SHEET_API) return;
-  try{ const j=await sheetGet({action:"board"}); if(j&&j.ok){ hallRows=j.rows.map(r=>({name:r.id+" "+r.name,minNotes:r.minNotes,attempts:r.minAttempts,minAt:r.minAt,teach:r.teach,teachAt:r.teachAt}));
+  try{ const j=await sheetGet({action:"board"}); if(j&&j.ok){ hallRows=j.rows.map(r=>({name:dispName(r),minNotes:r.minNotes,attempts:r.minAttempts,minAt:r.minAt,teach:r.teach,teachAt:r.teachAt}));
     $("hallMode").textContent="반 전체 기록이 공유돼요. (15초마다 자동 새로 고침)"; renderBoards(); }
     else $("hallMode").textContent="반 코드가 맞지 않아 기록을 불러오지 못했어요. 선생님께 알려 주세요."; }
   catch(e){ $("hallMode").textContent="기록 저장소에 연결하지 못했어요. 인터넷 연결을 확인해 주세요."; }
@@ -616,14 +642,14 @@ function saveRecord(){
 function escH(t){return String(t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 const MEDAL=["🥇","🥈","🥉"];
 let banSel=null;
-const banOf=n=>{ const m=/^(\d)(\d\d)\d\d /.exec(n||""); return m?`${m[1]}-${+m[2]}`:null; };
+const banOf=n=>{ if(/^교사 /.test(n||"")) return "교사"; const m=/^(\d)(\d\d)\d\d /.exec(n||""); return m?`${m[1]}-${+m[2]}`:null; };
 function renderBoards(){
   const all = hallRows || Object.values(localBoard);
   const me=who();
-  const bans=[...new Set([...all.map(r=>banOf(r.name)),banOf(me)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const bans=[...new Set([...all.map(r=>banOf(r.name)),banOf(me)].filter(Boolean))].sort((a,b)=>a==="교사"?1:b==="교사"?-1:a.localeCompare(b,undefined,{numeric:true}));
   if(banSel===null) banSel = banOf(me) && bans.includes(banOf(me)) ? banOf(me) : "전체";
   if(banSel!=="전체" && !bans.includes(banSel)) banSel="전체";
-  $("banTabs").innerHTML=["전체",...bans].map(b=>`<button class="chip" role="tab" aria-pressed="${b===banSel}" data-ban="${b}">${b==="전체"?"전체":b+"반"}</button>`).join("");
+  $("banTabs").innerHTML=["전체",...bans].map(b=>`<button class="chip" role="tab" aria-pressed="${b===banSel}" data-ban="${b}">${b==="전체"?"전체":b==="교사"?"👩‍🏫 교사":b+"반"}</button>`).join("");
   $("banTabs").querySelectorAll("button").forEach(x=>x.onclick=()=>{ banSel=x.dataset.ban; renderBoards(); });
   const rows = banSel==="전체" ? all : all.filter(r=>banOf(r.name)===banSel);
   const mins=rows.filter(r=>r.minNotes!=null).sort((a,b)=>a.minNotes-b.minNotes||(a.attempts||0)-(b.attempts||0)||(a.minAt||0)-(b.minAt||0)).slice(0,10);
@@ -631,18 +657,60 @@ function renderBoards(){
   const tchAll=rows.filter(r=>r.teach>0).sort((a,b)=>b.teach-a.teach||String(a.name).localeCompare(String(b.name)));
   tchAll.forEach((r,i)=>{ r._rank = (i>0 && tchAll[i-1].teach===r.teach) ? tchAll[i-1]._rank : i+1; });
   const tch=tchAll.filter(r=>r._rank<=10);
-  const tb=(list,cols)=> list.length ? `<table><thead><tr><th>순위</th><th>이름</th>${cols.map(c=>`<th class="n">${c[0]}</th>`).join("")}</tr></thead><tbody>${list.map((r,i)=>`<tr class="${r.name===me?"me":""}"><td>${MEDAL[r._rank-1]||r._rank}</td><td>${escH(r.name)}</td>${cols.map(c=>`<td class="n">${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody></table>` : `<div class="empty">아직 기록이 없어요.</div>`;
+  const adm=isAdmin && fb;
+  const tb=(list,cols)=> list.length ? `<table><thead><tr><th>순위</th><th>이름</th>${cols.map(c=>`<th class="n">${c[0]}</th>`).join("")}${adm?"<th></th>":""}</tr></thead><tbody>${list.map((r,i)=>`<tr class="${r.name===me?"me":""}"><td>${MEDAL[r._rank-1]||r._rank}</td><td>${escH(r.name)}</td>${cols.map(c=>`<td class="n">${c[1](r)}</td>`).join("")}${adm&&r.id?`<td><button class="delbtn" data-del="${escH(r.id)}" title="기록 삭제">🗑</button></td>`:""}</tr>`).join("")}</tbody></table>` : `<div class="empty">아직 기록이 없어요.</div>`;
   $("boardMin").innerHTML=tb(mins,[["노트 장면",r=>r.minNotes+"장면"],["시험",r=>(r.attempts||"-")+"회"]]);
+  setTimeout(bindDel,0);
   $("boardTeach").innerHTML=tb(tch,[["가르친 장면",r=>r.teach+" / "+SCENE_MAX]]);
+}
+/* ---------- 관리자: Google 로그인 후 기록 삭제 ---------- */
+let isAdmin=false;
+const adminOk=u=>!!(u && ADMIN_EMAIL && u.email && u.email.toLowerCase()===ADMIN_EMAIL.toLowerCase() && u.emailVerified!==false);
+function setupAdmin(){
+  if(!fb || !ADMIN_EMAIL) return;
+  const btn=$("adminBtn");
+  const showBtn=()=>{ btn.hidden=!(isAdmin || /^#admin$/i.test(location.hash)); };  // 주소 끝에 #admin을 붙였을 때만 보임
+  showBtn(); window.addEventListener("hashchange",showBtn);
+  firebase.auth().onAuthStateChanged(u=>{
+    isAdmin=adminOk(u); showBtn();
+    btn.textContent = isAdmin ? "관리자 로그아웃" : "🔐 관리자";
+    $("adminBar").hidden=!isAdmin;
+    $("adminBar").textContent = isAdmin ? `관리자 모드 (${u.email}) — 순위표의 🗑을 두 번 누르면 그 박사님의 기록과 대화 로그가 삭제돼요.` : "";
+    renderBoards();
+  });
+  btn.onclick=async()=>{
+    const auth=firebase.auth();
+    if(isAdmin){ await auth.signOut(); try{ await auth.signInAnonymously(); }catch(e){} toast("관리자 모드를 종료했어요."); return; }
+    try{
+      const res=await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      if(!adminOk(res.user)){ toast("관리자 계정이 아니에요."); await auth.signOut(); try{ await auth.signInAnonymously(); }catch(e){} }
+      else toast("관리자 모드로 전환했어요.");
+    }catch(e){ console.warn(e); toast("로그인하지 못했어요: "+String((e&&e.code)||e).replace("auth/","")); }
+  };
+}
+function bindDel(){
+  document.querySelectorAll(".delbtn").forEach(b=>{
+    b.onclick=async()=>{
+      if(!b.classList.contains("armed")){ document.querySelectorAll(".delbtn.armed").forEach(x=>{x.classList.remove("armed");x.textContent="🗑";}); b.classList.add("armed"); b.textContent="삭제?"; setTimeout(()=>{ if(b.isConnected){ b.classList.remove("armed"); b.textContent="🗑"; } },3000); return; }
+      const id=b.dataset.del; b.disabled=true; b.textContent="…";
+      try{
+        await fb.collection(FB_COL).doc(id).delete();
+        const q=await fb.collection(FB_COL+"_chat").where("id","==",id).get();
+        const docs=q.docs; for(let i=0;i<docs.length;i+=400){ const batch=fb.batch(); docs.slice(i,i+400).forEach(d=>batch.delete(d.ref)); await batch.commit(); }
+        toast(`${id} 기록과 대화 ${docs.length}건을 삭제했어요.`);
+      }catch(e){ console.warn(e); toast("삭제하지 못했어요. 보안 규칙의 관리자 이메일을 확인하세요."); b.disabled=false; b.textContent="🗑"; }
+    };
+  });
 }
 async function initHall(){
   if(FIREBASE_CONFIG){
     $("hallMode").textContent="실시간 기록 서버에 연결하는 중이에요…";
     try{ fb=await initFirebase(); }catch(e){ fb=null; $("hallMode").textContent="실시간 기록 서버에 연결하지 못했어요. 이 기기 기록만 보여요."; renderBoards(); return; }
     fbUnsub=fb.collection(FB_COL).onSnapshot(snap=>{
-      hallRows=snap.docs.map(d=>{const r=d.data(); return {name:r.id+" "+r.name,minNotes:r.minNotes??null,attempts:r.minAttempts,minAt:r.minAt,teach:r.teach||0,teachAt:r.teachAt};});
+      hallRows=snap.docs.map(d=>{const r=d.data(); return {id:d.id,name:dispName(r),minNotes:r.minNotes??null,attempts:r.minAttempts,minAt:r.minAt,teach:r.teach||0,teachAt:r.teachAt};});
       $("hallMode").textContent="🔴 실시간 — 다른 박사님의 기록이 바로바로 반영돼요."; renderBoards();
     },e=>{ $("hallMode").textContent="기록을 불러올 권한이 없어요. 선생님께 알려 주세요."; });
+    setupAdmin();
     if(who()){ await fbRestore(); fbSave(); }
     return;
   }
@@ -673,19 +741,62 @@ initHall();
   const ID_RE=/^[1-3](0[1-9]|1[0-9])(0[1-9]|[1-3][0-9])$/, NAME_RE=/^[가-힣]{2,5}$/;
   function check(){
     const id=$("gId").value.trim(), nm=$("gName").value.trim(), h=$("gHint");
-    $("gId").value=id.replace(/\D/g,"");
+    const isT=/^교/.test(id);
+    if(!isT) $("gId").value=id.replace(/\D/g,"");
     let ok=false;
-    if(!id && !nm){ h.className="ghint"; h.textContent="학번 5자리(학년·반·번호)와 한글 이름을 입력하세요."; }
+    if(!id && !nm){ h.className="ghint"; h.textContent="학번 5자리(학년·반·번호)와 한글 이름을 입력하세요. 선생님은 학번에 ‘교사’를 입력하세요."; }
+    else if(isT){ if(id!=="교사"){ h.className="ghint err"; h.textContent="선생님은 학번 칸에 ‘교사’라고 입력하세요."; }
+      else if(!NAME_RE.test(nm)){ h.className="ghint err"; h.textContent="이름은 한글 2~5자로 입력하세요."; }
+      else { ok=true; h.className="ghint ok"; h.textContent=`${nm} 선생님(교사), 맞나요?`; } }
     else if(!ID_RE.test(id)){ h.className="ghint err"; h.textContent="학번은 5자리 숫자예요. 예: 3학년 6반 1번 → 30601"; }
     else if(!NAME_RE.test(nm)){ h.className="ghint err"; h.textContent="이름은 한글 2~5자로 입력하세요."; }
     else { ok=true; h.className="ghint ok"; h.textContent=`${id[0]}학년 ${+id.slice(1,3)}반 ${+id.slice(3)}번 ${nm} 박사님, 맞나요?`; }
     $("gStart").disabled=!ok; return ok;
   }
+  $("gTeacher").onclick=()=>{ $("gId").value="교사"; check(); $("gName").focus(); };
   ["gId","gName"].forEach(x=>{ $(x).addEventListener("input",check); $(x).addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.isComposing&&check()) $("gStart").click(); }); });
+  /* ---------- 사용법 안내 (금쪽이가 단계별로 설명) ---------- */
+  const TOUR=[
+    {sel:".pick", t:"① 먼저 저한테 보여 줄 <b>시료</b>와 <b>온도</b>를 골라 주세요!"},
+    {sel:".magctl", t:"② 슬라이더를 <b>가까이 끝까지</b> 밀었다가 <b>멀리 끝까지</b> 돌려 주세요. 자석을 댔다가 떼는 거예요!"},
+    {sel:"#teach", t:"③ 그러면 이 버튼이 켜져요. 눌러서 저에게 <b>가르쳐</b> 주세요!"},
+    {sel:".note", t:"④ 배운 장면은 제 노트에 쌓여요. 저는 <b>노트에 있는 것만</b> 알아요!"},
+    {sel:".exam", t:"⑤ 시험 문제를 먼저 읽어 보고, 필요한 장면을 가르친 다음 <b>시험 보기</b>를 눌러 주세요!"},
+    {sel:".hall", t:"⑥ 적은 장면으로 만점이면 <b>쪽집게 교수님</b>, 많이 가르치면 <b>열정적인 교수님</b>! 그럼 시작해요!"}
+  ];
+  let ti=0, tEl=null;
+  const reduceT=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function tourPlace(){
+    if($("tour").hidden||!tEl) return;
+    const r=tEl.getBoundingClientRect(), pad=8, hole=$("tourHole"), card=$("tourCard");
+    const top=Math.max(4,r.top-pad), left=Math.max(4,r.left-pad), h=Math.min(r.height+pad*2, innerHeight-8), w=Math.min(r.width+pad*2, innerWidth-8);
+    Object.assign(hole.style,{top:top+"px",left:left+"px",width:w+"px",height:h+"px"});
+    const ch=card.offsetHeight||150, cw=card.offsetWidth||330;
+    let ct = (top+h+12+ch < innerHeight) ? top+h+12 : (top-ch-12 > 0 ? top-ch-12 : innerHeight-ch-12);
+    let cl = clamp(left, 12, innerWidth-cw-12);
+    Object.assign(card.style,{top:ct+"px",left:cl+"px"});
+  }
+  function tourShow(){
+    const st=TOUR[ti]; tEl=document.querySelector(st.sel);
+    $("tourStep").textContent=`사용법 ${ti+1} / ${TOUR.length}`; $("tourText").innerHTML=st.t;
+    $("tourNext").textContent= ti===TOUR.length-1 ? "시작하기" : "다음"; $("tourPrev").style.visibility = ti===0 ? "hidden":"visible";
+    if(!tEl){ tourPlace(); return; }
+    tEl.scrollIntoView({block:"center",behavior:reduceT?"auto":"smooth"});
+    tourPlace(); setTimeout(tourPlace, reduceT?0:420);
+  }
+  function openTour(){ ti=0; $("tour").hidden=false; tourShow(); $("tourNext").focus(); }
+  function closeTour(){ $("tour").hidden=true; LS.set("tourDone",1); window.scrollTo({top:0,behavior:reduceT?"auto":"smooth"}); kid("happy","준비됐어요! 시료와 온도를 골라서 보여 주세요!"); }
+  $("tourNext").onclick=()=>{ if(ti<TOUR.length-1){ ti++; tourShow(); } else closeTour(); };
+  $("tourPrev").onclick=()=>{ if(ti>0){ ti--; tourShow(); } };
+  $("tourSkip").onclick=closeTour;
+  $("helpBtn").onclick=openTour;
+  addEventListener("resize",tourPlace); addEventListener("scroll",tourPlace,{passive:true});
+  document.addEventListener("keydown",e=>{ if($("tour").hidden) return; if(e.key==="Escape") closeTour(); else if(e.key==="ArrowRight") $("tourNext").click(); else if(e.key==="ArrowLeft") $("tourPrev").click(); });
   function enter(full){
     $("who").value=full; $("who").dispatchEvent(new Event("change"));
     $("whoText").textContent=full;
     $("gate").hidden=true; document.body.style.overflow="";
+    if(!LS.get("tourDone",0)) setTimeout(openTour,450);
   }
   function openGate(resume){
     $("gate").hidden=false; document.body.style.overflow="hidden";
@@ -697,7 +808,7 @@ initHall();
   $("gOther").onclick=()=>openGate(null);
   $("switchUser").onclick=()=>openGate(null);
   const saved=who(); $("whoText").textContent=saved;
-  openGate(/^\d{5} [가-힣]{2,5}$/.test(saved) ? saved : null);
+  openGate(/^(\d{5}|교사) [가-힣]{2,5}$/.test(saved) ? saved : null);
 })();
 
 /* ---------- 가르치기 / 노트 ---------- */
