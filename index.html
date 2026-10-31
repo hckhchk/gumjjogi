@@ -1171,7 +1171,7 @@ async function send(){
       chat.pop();
       if(e && e.code==="not_granted"){ sampleFn=null; $("aiMode").textContent="기본 대화 모드"; }
       if(e && e.code==="cooldown" || /429|quota|RESOURCE_EXHAUSTED/i.test(String(e&&e.message))) $("aiMode").textContent="AI 사용량이 잠시 가득 찼어요. 1분 동안 기본 대화로 답해요.";
-      else if(e && e.code!=="not_granted") { console.warn("AI 응답 실패",e); $("aiMode").textContent="AI 응답 실패, 기본 대화로 답했어요 ("+String((e&&e.message)||e).slice(0,80)+")"; }
+      else if(e && e.code!=="not_granted") { console.warn("AI 응답 실패",e); $("aiMode").textContent="AI 응답 실패, 기본 대화로 답했어요 ("+aiErrText(e)+")"; $("aiMode").title=String((e&&e.message)||e); }
       const r=scripted(t,angry); pushChat("kid",r.text); kid(r.mood,r.text);
     }finally{ busy=false; $("send").disabled=false; }
   } else {
@@ -1202,6 +1202,13 @@ $("saveLog").onclick=async()=>{
 const AI_SDK="12.19.0";
 const AI_MODELS=["gemini-3.1-flash-lite","gemini-3.5-flash-lite","gemini-2.5-flash-lite","gemini-2.5-flash"];
 let aiCool=0;
+function aiErrText(e){
+  const msg=String((e&&e.message)||e);
+  const m=msg.match(/\[(\d{3})[^\]]*\]\s*([^(]*)/);            // 예: "[403 ] Firebase AI Logic API has not been used ..."
+  const code=m?m[1]:(/failed to fetch|network/i.test(msg)?"네트워크":"");
+  const why=(m?m[2]:msg.replace(/^.*?:\s*/,"")).trim().slice(0,140);
+  return (code?code+" · ":"")+why;
+}
 async function initGeminiChat(){
   if(!FIREBASE_CONFIG){ $("aiMode").textContent="기본 대화 모드"; return; }
   $("aiMode").textContent="AI 금쪽이 연결 중…";
@@ -1231,7 +1238,7 @@ async function initGeminiChat(){
       throw lastErr;
     };
     $("aiMode").textContent="AI 금쪽이와 대화 중 (Gemini) — 연결이 안 되면 기본 대화로 자동 전환돼요";
-  }catch(e){ console.warn("Gemini 연결 실패",e); sampleFn=null; $("aiMode").textContent="기본 대화 모드 (AI 연결 실패: "+String((e&&e.message)||e).slice(0,80)+")"; }
+  }catch(e){ console.warn("Gemini 연결 실패",e); sampleFn=null; $("aiMode").textContent="기본 대화 모드 (AI 연결 실패: "+aiErrText(e)+")"; }
 }
 (async()=>{
   for(let i=0;i<20&&!(window.claude&&window.claude.use);i++) await new Promise(r=>setTimeout(r,100));
