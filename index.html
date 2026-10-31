@@ -1200,6 +1200,8 @@ $("saveLog").onclick=async()=>{
 };
 /* ---------- Gemini (Firebase AI Logic) 대화: Claude 밖(웹 게시)에서 사용 ---------- */
 const AI_SDK="12.19.0";
+/* App Check (Fraud Defense, 이전 reCAPTCHA Enterprise) 사이트 키 — AI 요청이 우리 사이트에서 온 것임을 증명 */
+const APPCHECK_KEY = "6LeVgAkuAAAAAPEFGx2nc4QvQjw19hmzSN4lvaEm";
 const AI_MODELS=["gemini-3.1-flash-lite","gemini-3.5-flash-lite","gemini-2.5-flash-lite","gemini-2.5-flash"];
 let aiCool=0;
 function aiErrText(e){
@@ -1216,6 +1218,11 @@ async function initGeminiChat(){
     const appMod=await import(`https://www.gstatic.com/firebasejs/${AI_SDK}/firebase-app.js`);
     const aiMod=await import(`https://www.gstatic.com/firebasejs/${AI_SDK}/firebase-ai.js`);
     const app=appMod.initializeApp(FIREBASE_CONFIG,"gumjjogi-ai");
+    if(APPCHECK_KEY){
+      try{ const acMod=await import(`https://www.gstatic.com/firebasejs/${AI_SDK}/firebase-app-check.js`);
+        acMod.initializeAppCheck(app,{provider:new acMod.ReCaptchaEnterpriseProvider(APPCHECK_KEY),isTokenAutoRefreshEnabled:true}); }
+      catch(e){ console.warn("App Check 초기화 실패",e); }
+    }
     const ai=aiMod.getAI(app,{backend:new aiMod.GoogleAIBackend()});
     let order=AI_MODELS.slice(); const saved=LS.get("aiModel",null); if(saved&&order.includes(saved)) order=[saved,...order.filter(x=>x!==saved)];
     sampleFn=async(prompt,opts={})=>{
