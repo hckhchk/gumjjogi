@@ -1162,7 +1162,7 @@ async function send(){
   if(anger>=70) kid("confused",null,true);
   if(sampleFn){
     busy=true; $("send").disabled=true;
-    chat.push({who:"kid",text:"…",t:stamp()}); renderChat();
+    chat.push({who:"kid",text:"금쪽이가 생각 중… 🤔",t:stamp()}); renderChat();
     try{
       const {text}=await sampleFn(prompt,{modelTier:"quick",cache:false,onText:({text})=>{chat[chat.length-1].text=text;renderChat();}});
       chat[chat.length-1].text=mask(text.trim()||"…"); LS.set("chat",chat); renderChat(); sheetLog("kid",chat[chat.length-1].text);
@@ -1230,9 +1230,10 @@ async function initGeminiChat(){
       let lastErr=null;
       for(const name of order){
         try{
-          const model=aiMod.getGenerativeModel(ai,{model:name,generationConfig:{maxOutputTokens:600,temperature:0.8}});
+          const model=aiMod.getGenerativeModel(ai,{model:name,generationConfig:{maxOutputTokens:1500,temperature:0.8}});
           const res=await model.generateContentStream(prompt);
-          let acc=""; for await(const ch of res.stream){ acc+=ch.text(); opts.onText&&opts.onText({text:acc}); }
+          let acc=""; for await(const ch of res.stream){ let t=""; try{ t=ch.text()||""; }catch(_){ } if(t){ acc+=t; opts.onText&&opts.onText({text:acc}); } }
+          if(!acc.trim()){ lastErr=new Error("[204 ] 빈 응답 (생각만 하고 대답을 못 했어요)"); continue; }
           if(order[0]!==name){ order=[name,...order.filter(x=>x!==name)]; LS.set("aiModel",name); }
           $("aiMode").textContent="AI 금쪽이와 대화 중 (Gemini) — 연결이 안 되면 기본 대화로 자동 전환돼요";
           return {text:acc};
