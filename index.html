@@ -164,6 +164,12 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 .board th,.board td{padding:6px 6px;border-bottom:1px solid var(--line);text-align:left}
 .board th{font-weight:500;color:var(--muted);font-size:12px}
 .board td.n{text-align:right;font-variant-numeric:tabular-nums}
+.board .rk{width:48px;text-align:center}
+.rkb{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 6px;border-radius:13px;font-weight:700;font-size:13px;line-height:1;background:var(--sunk);color:var(--muted);font-variant-numeric:tabular-nums}
+.rkb.r1{background:linear-gradient(160deg,#FFE08A,#E3A51C);color:#5A3B00;box-shadow:0 0 0 1px rgba(160,110,0,.35)}
+.rkb.r2{background:linear-gradient(160deg,#F1F4F8,#AEB8C6);color:#2F3A48;box-shadow:0 0 0 1px rgba(90,105,125,.35)}
+.rkb.r3{background:linear-gradient(160deg,#F3C9A0,#B9773E);color:#4A2A0E;box-shadow:0 0 0 1px rgba(130,75,30,.35)}
+.board td{vertical-align:middle}
 .board tr.me td{background:color-mix(in srgb,var(--jacket) 12%,transparent);font-weight:700}
 .board .empty{color:var(--muted);font-size:14px;padding:10px 0}
 @media (max-width:720px){.hallgrid{grid-template-columns:1fr}}
@@ -702,13 +708,16 @@ function renderBoards(){
   $("banTabs").innerHTML=["전체",...bans].map(b=>`<button class="chip" role="tab" aria-pressed="${b===banSel}" data-ban="${b}">${b==="전체"?"전체":b==="교사"?"👩‍🏫 교사":b+"반"}</button>`).join("");
   $("banTabs").querySelectorAll("button").forEach(x=>x.onclick=()=>{ banSel=x.dataset.ban; renderBoards(); });
   const rows = banSel==="전체" ? all : all.filter(r=>banOf(r.name)===banSel);
-  const mins=rows.filter(r=>r.minNotes!=null).sort((a,b)=>a.minNotes-b.minNotes||(a.attempts||0)-(b.attempts||0)||(a.minAt||0)-(b.minAt||0)).slice(0,10);
-  mins.forEach((r,i)=>r._rank=i+1);
-  const tchAll=rows.filter(r=>r.teach>0).sort((a,b)=>b.teach-a.teach||String(a.name).localeCompare(String(b.name)));
-  tchAll.forEach((r,i)=>{ r._rank = (i>0 && tchAll[i-1].teach===r.teach) ? tchAll[i-1]._rank : i+1; });
+  /* 두 순위표가 같은 기록을 공유하므로 순위는 각자 복사본에 따로 계산 (섞이지 않게) */
+  const minsAll=rows.filter(r=>r.minNotes!=null).map(r=>({...r}))
+    .sort((a,b)=>a.minNotes-b.minNotes||(a.attempts||0)-(b.attempts||0)||String(a.name).localeCompare(String(b.name)));
+  minsAll.forEach((r,i)=>{ const p=minsAll[i-1]; r._rank=(p && p.minNotes===r.minNotes && (p.attempts||0)===(r.attempts||0)) ? p._rank : i+1; });
+  const mins=minsAll.filter(r=>r._rank<=10);
+  const tchAll=rows.filter(r=>r.teach>0).map(r=>({...r})).sort((a,b)=>b.teach-a.teach||String(a.name).localeCompare(String(b.name)));
+  tchAll.forEach((r,i)=>{ const p=tchAll[i-1]; r._rank=(p && p.teach===r.teach) ? p._rank : i+1; });
   const tch=tchAll.filter(r=>r._rank<=10);
   const adm=isAdmin && fb;
-  const tb=(list,cols)=> list.length ? `<table><thead><tr><th>순위</th><th>이름</th>${cols.map(c=>`<th class="n">${c[0]}</th>`).join("")}${adm?"<th></th>":""}</tr></thead><tbody>${list.map((r,i)=>`<tr class="${r.name===me?"me":""}"><td>${MEDAL[r._rank-1]||r._rank}</td><td>${escH(r.name)}</td>${cols.map(c=>`<td class="n">${c[1](r)}</td>`).join("")}${adm&&r.id?`<td><button class="delbtn" data-del="${escH(r.id)}" title="기록 삭제">🗑</button></td>`:""}</tr>`).join("")}</tbody></table>` : `<div class="empty">아직 기록이 없어요.</div>`;
+  const tb=(list,cols)=> list.length ? `<table><thead><tr><th class="rk">순위</th><th>이름</th>${cols.map(c=>`<th class="n">${c[0]}</th>`).join("")}${adm?"<th></th>":""}</tr></thead><tbody>${list.map((r,i)=>`<tr class="${r.name===me?"me":""}"><td class="rk"><span class="rkb r${r._rank<=3?r._rank:0}">${r._rank}</span></td><td>${escH(r.name)}</td>${cols.map(c=>`<td class="n">${c[1](r)}</td>`).join("")}${adm&&r.id?`<td><button class="delbtn" data-del="${escH(r.id)}" title="기록 삭제">🗑</button></td>`:""}</tr>`).join("")}</tbody></table>` : `<div class="empty">아직 기록이 없어요.</div>`;
   $("boardMin").innerHTML=tb(mins,[["노트 장면",r=>r.minNotes+"장면"],["시험",r=>(r.attempts||"-")+"회"]]);
   setTimeout(bindDel,0);
   $("boardTeach").innerHTML=tb(tch,[["가르친 장면",r=>r.teach+" / "+SCENE_MAX]]);
