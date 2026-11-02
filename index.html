@@ -164,6 +164,19 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 .board th,.board td{padding:6px 6px;border-bottom:1px solid var(--line);text-align:left}
 .board th{font-weight:500;color:var(--muted);font-size:12px}
 .board td.n{text-align:right;font-variant-numeric:tabular-nums}
+.viewbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:-4px 0 12px;flex-wrap:wrap}
+.viewtabs{display:flex;gap:6px}
+.pcount{font-size:13px;color:var(--muted)}
+.hallgrid[hidden],#boardAll[hidden]{display:none}
+.alltable{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.alltable table{width:100%;border-collapse:collapse;font-size:14px}
+.alltable th{position:sticky;top:0;background:var(--surface);z-index:1;font-weight:500;color:var(--muted);font-size:12px;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+.alltable td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.alltable td.n,.alltable th.n{text-align:right;white-space:nowrap}
+.alltable tr.me td{background:color-mix(in srgb,var(--jacket) 12%,transparent);font-weight:700}
+.alltable .rkb{min-width:22px;height:22px;font-size:12px}
+.sm{font-size:12.5px;color:var(--ink)} .sm.muted{color:var(--muted)}
+.board tr.gap td{text-align:center;color:var(--muted);font-size:12px;padding:4px;border-bottom:1px dashed var(--line)}
 .board .rk{width:48px;text-align:center}
 .rkb{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 6px;border-radius:13px;font-weight:700;font-size:13px;line-height:1;background:var(--sunk);color:var(--muted);font-variant-numeric:tabular-nums}
 .rkb.r1{background:linear-gradient(160deg,#FFE08A,#E3A51C);color:#5A3B00;box-shadow:0 0 0 1px rgba(160,110,0,.35)}
@@ -401,7 +414,9 @@ body{word-break:keep-all;overflow-wrap:anywhere}
     <div class="examhead"><div><h2 class="display">명예의 전당</h2><p id="hallMode">기록을 불러오는 중입니다.</p></div><button class="btn ghost small" id="adminBtn" hidden>🔐 관리자</button></div>
     <p class="adminbar" id="adminBar" hidden></p>
     <div class="bantabs" id="banTabs" role="tablist" aria-label="반 선택"></div>
-    <div class="hallgrid">
+    <div class="viewbar"><div class="viewtabs" id="viewTabs" role="tablist" aria-label="보기 방식"><button class="chip" data-v="top" aria-pressed="true">🏆 TOP 10</button><button class="chip" data-v="all" aria-pressed="false">📋 전체 목록</button></div><span class="pcount" id="pCount"></span></div>
+    <div id="boardAll" hidden></div>
+    <div class="hallgrid" id="hallGrid">
       <div class="board"><h3 class="display">🎯 쪽집게 교수님</h3><p class="btag">금쪽이를 만점으로 이끈 교수님</p><div id="boardMin"></div><p class="bsub">찍지 않고 12문제 만점 · 노트 장면이 적을수록 높은 순위 (같으면 시험 횟수가 적은 순)</p></div>
       <div class="board"><h3 class="display">🔥 열정적인 교수님</h3><p class="btag">금쪽이를 가장 많이 가르친 교수님</p><div id="boardTeach"></div><p class="bsub">가르친 서로 다른 장면 수 순위 · 같은 수는 공동 순위 (같은 장면 반복, 처음부터 다시는 제외)</p></div>
     </div>
@@ -717,11 +732,32 @@ function renderBoards(){
   tchAll.forEach((r,i)=>{ const p=tchAll[i-1]; r._rank=(p && p.teach===r.teach) ? p._rank : i+1; });
   const tch=tchAll.filter(r=>r._rank<=10);
   const adm=isAdmin && fb;
-  const tb=(list,cols)=> list.length ? `<table><thead><tr><th class="rk">순위</th><th>이름</th>${cols.map(c=>`<th class="n">${c[0]}</th>`).join("")}${adm?"<th></th>":""}</tr></thead><tbody>${list.map((r,i)=>`<tr class="${r.name===me?"me":""}"><td class="rk"><span class="rkb r${r._rank<=3?r._rank:0}">${r._rank}</span></td><td>${escH(r.name)}</td>${cols.map(c=>`<td class="n">${c[1](r)}</td>`).join("")}${adm&&r.id?`<td><button class="delbtn" data-del="${escH(r.id)}" title="기록 삭제">🗑</button></td>`:""}</tr>`).join("")}</tbody></table>` : `<div class="empty">아직 기록이 없어요.</div>`;
-  $("boardMin").innerHTML=tb(mins,[["노트 장면",r=>r.minNotes+"장면"],["시험",r=>(r.attempts||"-")+"회"]]);
-  setTimeout(bindDel,0);
-  $("boardTeach").innerHTML=tb(tch,[["가르친 장면",r=>r.teach+" / "+SCENE_MAX]]);
+  const rkCell=r=>`<td class="rk"><span class="rkb r${r._rank<=3?r._rank:0}">${r._rank}</span></td>`;
+  const delCell=r=>adm&&r.id?`<td><button class="delbtn" data-del="${escH(r.id)}" title="기록 삭제">🗑</button></td>`:(adm?"<td></td>":"");
+  const row=(r,cols)=>`<tr class="${r.name===me?"me":""}">${rkCell(r)}<td>${escH(r.name)}</td>${cols.map(c=>`<td class="n">${c[1](r)}</td>`).join("")}${delCell(r)}</tr>`;
+  /* TOP 10 아래에 '내 순위'를 따로 붙여, 10위 밖이어도 내 위치를 볼 수 있게 함 */
+  const tb=(list,full,cols)=>{
+    if(!list.length) return `<div class="empty">아직 기록이 없어요.</div>`;
+    const mine=full.find(r=>r.name===me), pin = mine && !list.includes(mine);
+    return `<table><thead><tr><th class="rk">순위</th><th>이름</th>${cols.map(c=>`<th class="n">${c[0]}</th>`).join("")}${adm?"<th></th>":""}</tr></thead><tbody>${list.map(r=>row(r,cols)).join("")}${pin?`<tr class="gap"><td colspan="${cols.length+2+(adm?1:0)}">⋯ 내 순위 ⋯</td></tr>${row(mine,cols)}`:""}</tbody></table>`;
+  };
+  const colMin=[["노트 장면",r=>r.minNotes+"장면"],["시험",r=>(r.attempts||"-")+"회"]], colTch=[["가르친 장면",r=>r.teach+" / "+SCENE_MAX]];
+  $("boardMin").innerHTML=tb(mins,minsAll,colMin);
+  $("boardTeach").innerHTML=tb(tch,tchAll,colTch);
+  /* 전체 목록: 반의 모든 참여자를 학번 순으로, 두 순위를 함께 표시 */
+  const rMin=new Map(minsAll.map(r=>[r.name,r])), rTch=new Map(tchAll.map(r=>[r.name,r]));
+  const people=[...new Map(rows.map(r=>[r.name,r])).values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{numeric:true}));
+  $("pCount").textContent = people.length ? `참여 ${people.length}명` : "";
+  $("boardAll").innerHTML = people.length ? `<div class="alltable"><table><thead><tr><th>이름</th><th class="n">🎯 쪽집게</th><th class="n">🔥 열정</th>${adm?"<th></th>":""}</tr></thead><tbody>${people.map(r=>{
+      const a=rMin.get(r.name), t=rTch.get(r.name);
+      const cm = a ? `<span class="rkb r${a._rank<=3?a._rank:0}">${a._rank}</span> <span class="sm">${a.minNotes}장면·${a.attempts||"-"}회</span>` : `<span class="sm muted">도전 중</span>`;
+      const ct = t ? `<span class="rkb r${t._rank<=3?t._rank:0}">${t._rank}</span> <span class="sm">${t.teach}/${SCENE_MAX}</span>` : `<span class="sm muted">-</span>`;
+      return `<tr class="${r.name===me?"me":""}"><td>${escH(r.name)}</td><td class="n">${cm}</td><td class="n">${ct}</td>${delCell(r)}</tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">아직 기록이 없어요.</div>`;
+  $("boardAll").hidden = hallView!=="all"; $("hallGrid").hidden = hallView==="all";
+  $("viewTabs").querySelectorAll("button").forEach(x=>{ x.setAttribute("aria-pressed",String(x.dataset.v===hallView)); x.onclick=()=>{ hallView=x.dataset.v; renderBoards(); }; });
+  setTimeout(()=>{ bindDel(); if(hallView==="all"){ const m=$("boardAll").querySelector("tr.me"); if(m) m.scrollIntoView({block:"nearest"}); } },0);
 }
+let hallView="top";
 /* ---------- 관리자: Google 로그인 후 기록 삭제 ---------- */
 let isAdmin=false;
 const adminOk=u=>!!(u && ADMIN_EMAIL && u.email && u.email.toLowerCase()===ADMIN_EMAIL.toLowerCase() && u.emailVerified!==false);
