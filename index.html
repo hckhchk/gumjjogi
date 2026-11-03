@@ -164,6 +164,19 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 .board th,.board td{padding:6px 6px;border-bottom:1px solid var(--line);text-align:left}
 .board th{font-weight:500;color:var(--muted);font-size:12px}
 .board td.n{text-align:right;font-variant-numeric:tabular-nums}
+.logs{background:var(--surface);border:2px solid color-mix(in srgb,var(--bad) 45%,var(--line));border-radius:10px;padding:18px}
+.logs[hidden]{display:none}
+.logfilter{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.logfilter select{margin-left:6px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+.loggrid{display:grid;grid-template-columns:260px 1fr;gap:12px}
+.loglist{max-height:480px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.logitem{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;padding:8px 10px;cursor:pointer;font:inherit;color:var(--ink)}
+.logitem[aria-pressed="true"]{background:color-mix(in srgb,var(--jacket) 14%,transparent);font-weight:700}
+.logitem small{color:var(--muted);font-size:12px;white-space:nowrap}
+.angerb{color:var(--bad);font-weight:700}
+.logview{max-height:480px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:12px}
+.logview .lhead{font-size:13px;color:var(--muted);margin:0 0 10px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+@media (max-width:760px){.loggrid{grid-template-columns:1fr}.loglist{max-height:220px}}
 .viewbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:-4px 0 12px;flex-wrap:wrap}
 .viewtabs{display:flex;gap:6px}
 .pcount{font-size:13px;color:var(--muted)}
@@ -420,6 +433,15 @@ body{word-break:keep-all;overflow-wrap:anywhere}
       <div class="board"><h3 class="display">🎯 쪽집게 교수님</h3><p class="btag">금쪽이를 만점으로 이끈 교수님</p><div id="boardMin"></div><p class="bsub">찍지 않고 12문제 만점 · 노트 장면이 적을수록 높은 순위 (같으면 시험 횟수가 적은 순)</p></div>
       <div class="board"><h3 class="display">🔥 열정적인 교수님</h3><p class="btag">금쪽이를 가장 많이 가르친 교수님</p><div id="boardTeach"></div><p class="bsub">가르친 서로 다른 장면 수 순위 · 같은 수는 공동 순위 (같은 장면 반복, 처음부터 다시는 제외)</p></div>
     </div>
+  </section>
+
+  <section class="logs" id="adminLogs" hidden aria-label="대화 로그 (관리자)">
+    <div class="examhead">
+      <div><h2 class="display">💬 대화 로그</h2><p>관리자에게만 보이는 화면이에요. 학생을 고르면 금쪽이와의 대화를 시간 순서대로 볼 수 있어요.</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" id="logLoad">불러오기</button><button class="btn ghost small" id="logCsv" disabled>CSV 저장</button></div>
+    </div>
+    <div class="logfilter"><label class="pcount">반 <select id="logBan"></select></label><span id="logInfo" class="pcount">‘불러오기’를 누르면 최신 대화를 가져와요.</span></div>
+    <div class="loggrid"><div class="loglist" id="logList"></div><div class="logview" id="logView"><div class="empty">학생을 선택하세요.</div></div></div>
   </section>
 
   <section class="chat" aria-label="금쪽이와 대화하기">
@@ -770,6 +792,9 @@ function setupAdmin(){
     isAdmin=adminOk(u); showBtn();
     btn.textContent = isAdmin ? "관리자 로그아웃" : "🔐 관리자";
     $("adminBar").hidden=!isAdmin;
+    $("adminLogs").hidden=!isAdmin;
+    if(isAdmin){ $("logLoad").onclick=loadLogs; $("logCsv").onclick=downloadLogs; if(!logData.length) loadLogs(); }
+    else { logData=[]; logSel=null; }
     $("adminBar").textContent = isAdmin ? `관리자 모드 (${u.email}) — 순위표의 🗑을 두 번 누르면 그 박사님의 기록과 대화 로그가 삭제돼요.` : "";
     renderBoards();
   });
@@ -782,6 +807,49 @@ function setupAdmin(){
       else toast("관리자 모드로 전환했어요.");
     }catch(e){ console.warn(e); toast("로그인하지 못했어요: "+String((e&&e.code)||e).replace("auth/","")); }
   };
+}
+/* ---------- 관리자: 대화 로그 보기 ---------- */
+let logData=[], logSel=null, logBanSel="전체";
+const banOfId=id=>String(id).startsWith("교사")?"교사":`${String(id)[0]}-${+String(id).slice(1,3)}`;
+const dispOfLog=x=>String(x.id).startsWith("교사")?"교사 "+x.name:x.id+" "+x.name;
+const isAngryMsg=t=>/●/.test(t)||new RegExp(ANGRY.source).test(t);
+const fmtT=ms=>ms?new Date(ms).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"";
+async function loadLogs(){
+  if(!fb||!isAdmin) return;
+  $("logInfo").textContent="불러오는 중…";
+  try{
+    const q=await fb.collection(FB_COL+"_chat").get();
+    logData=q.docs.map(d=>d.data()).filter(x=>x&&x.id).sort((a,b)=>(a.at||0)-(b.at||0));
+    $("logCsv").disabled=!logData.length; renderLogs();
+  }catch(e){ console.warn(e); $("logInfo").textContent="불러오지 못했어요 ("+((e&&e.code)||e)+"). 보안 규칙의 관리자 이메일을 확인하세요."; }
+}
+function renderLogs(){
+  const by=new Map();
+  for(const m of logData){ if(!by.has(m.id)) by.set(m.id,{id:m.id,name:dispOfLog(m),msgs:[]}); by.get(m.id).msgs.push(m); }
+  const bans=[...new Set([...by.keys()].map(banOfId))].sort((a,b)=>a==="교사"?1:b==="교사"?-1:a.localeCompare(b,undefined,{numeric:true}));
+  if(logBanSel!=="전체"&&!bans.includes(logBanSel)) logBanSel="전체";
+  $("logBan").innerHTML=["전체",...bans].map(b=>`<option value="${b}" ${b===logBanSel?"selected":""}>${b==="전체"?"전체":b==="교사"?"교사":b+"반"}</option>`).join("");
+  $("logBan").onchange=()=>{ logBanSel=$("logBan").value; logSel=null; renderLogs(); };
+  const people=[...by.values()].filter(x=>logBanSel==="전체"||banOfId(x.id)===logBanSel).sort((a,b)=>String(a.id).localeCompare(String(b.id),undefined,{numeric:true}));
+  const total=people.reduce((s,x)=>s+x.msgs.length,0);
+  $("logInfo").textContent=`학생 ${people.length}명 · 메시지 ${total}개`;
+  $("logList").innerHTML = people.length ? people.map(x=>{ const mine=x.msgs.filter(m=>m.who==="me"); const ang=mine.filter(m=>isAngryMsg(m.text||"")).length;
+      return `<button class="logitem" data-id="${escH(x.id)}" aria-pressed="${x.id===logSel}"><span>${escH(x.name)}</span><small>${mine.length}회${ang?` · <span class="angerb">😡${ang}</span>`:""}</small></button>`; }).join("") : `<div class="empty">대화 기록이 없어요.</div>`;
+  $("logList").querySelectorAll(".logitem").forEach(b=>b.onclick=()=>{ logSel=b.dataset.id; renderLogs(); });
+  const cur=by.get(logSel);
+  if(!cur){ $("logView").innerHTML=`<div class="empty">학생을 선택하세요.</div>`; return; }
+  const mine=cur.msgs.filter(m=>m.who==="me"), ang=mine.filter(m=>isAngryMsg(m.text||"")).length;
+  $("logView").innerHTML=`<p class="lhead"><b>${escH(cur.name)}</b> · 박사님 ${mine.length}회 · 금쪽이 ${cur.msgs.length-mine.length}회 · 분노 표현 ${ang}회 · ${fmtT(cur.msgs[0].at)} ~ ${fmtT(cur.msgs[cur.msgs.length-1].at)}</p>`+
+    cur.msgs.map(m=>`<div class="msg ${m.who==="me"?"me":"kid"}"><time>${m.who==="me"?"박사님":"금쪽이"} · ${fmtT(m.at)}</time>${escH(m.text||"")}</div>`).join("");
+  $("logView").scrollTop=0;
+}
+function downloadLogs(){
+  const rows=logData.filter(m=>logBanSel==="전체"||banOfId(m.id)===logBanSel);
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const csv="\uFEFF"+["시각,학번,이름,반,화자,내용",...rows.map(m=>[q(m.at?new Date(m.at).toLocaleString("ko-KR"):""),q(String(m.id).startsWith("교사")?"교사":m.id),q(m.name),q(banOfId(m.id)),q(m.who==="me"?"박사님":"금쪽이"),q(m.text)].join(","))].join("\r\n");
+  const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+  a.download=`금쪽이_대화로그_${logBanSel==="전체"?"전체":logBanSel}_${stamp}.csv`; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1000);
 }
 function bindDel(){
   document.querySelectorAll(".delbtn").forEach(b=>{
