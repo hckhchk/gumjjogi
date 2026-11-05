@@ -156,6 +156,7 @@ table.grid{border-collapse:separate;border-spacing:4px;width:100%;min-width:640p
 .delbtn.armed{background:var(--bad);color:#fff;border-color:var(--bad)}
 .bantabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
 .hallgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.board.torm{grid-column:1/-1}
 .board{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--bg)}
 .board h3{margin:0;font-size:20px}
 .btag{margin:2px 0 10px;font-size:14px;color:var(--ink)}
@@ -432,6 +433,7 @@ body{word-break:keep-all;overflow-wrap:anywhere}
     <div class="hallgrid" id="hallGrid">
       <div class="board"><h3 class="display">🎯 쪽집게 교수님</h3><p class="btag">금쪽이를 만점으로 이끈 교수님</p><div id="boardMin"></div><p class="bsub">찍지 않고 12문제 만점 · 노트 장면이 적을수록 높은 순위 (같으면 시험 횟수가 적은 순)</p></div>
       <div class="board"><h3 class="display">🔥 열정적인 교수님</h3><p class="btag">금쪽이를 가장 많이 가르친 교수님</p><div id="boardTeach"></div><p class="bsub">가르친 서로 다른 장면 수 순위 · 같은 수는 공동 순위 (같은 장면 반복, 처음부터 다시는 제외)</p></div>
+      <div class="board torm"><h3 class="display">😵‍💫 멘붕 유발 교수님</h3><p class="btag">금쪽이를 가장 정신없게 만든 교수님</p><div id="boardTorm"></div><p class="bsub">멘붕 지수 = 시험 횟수 + 분노 표현 × 2 + 기억 지우기(처음부터 다시·노트 삭제) × 3 · 같은 점수는 공동 순위</p></div>
     </div>
   </section>
 
@@ -628,6 +630,10 @@ function renderLabInfo(){
 
 /* ---------- 기록 / 명예의 전당 ---------- */
 let taught=LS.get("taught",[]), teachAt=LS.get("teachAt",0), attempts=LS.get("attempts",0);
+/* 😵 멘붕 지수용 누적 기록: 시험 횟수, 분노 표현, 기억 지우기(처음부터 다시·노트 삭제) */
+let torm=LS.get("torm",{exams:0,anger:0,wipes:0});
+const mentalScore=t=>t?((t.exams||0)+2*(t.anger||0)+3*(t.wipes||0)):0;
+function bumpTorm(k){ torm={...torm,[k]:(torm[k]||0)+1}; LS.set("torm",torm); saveRecord(); }
 let teachTotal=taught.length;
 const SCENE_MAX=MATS.length*ENVS.length - MATS.reduce((a,m,mi)=>a+ENVS.filter(e=>stateOf(mi,e.T).form==="gone").length,0);
 let rec=LS.get("rec",{minNotes:null,attempts:null});
@@ -639,9 +645,9 @@ let curWho=who();
 $("who").addEventListener("change",()=>{
   const nw=who(); if(nw===curWho) return;
   const carry = curWho==="" && !LS.get("u:"+nw,null);   // 이름 없이 하던 기록은 처음 적은 이름으로 이어감
-  if(!carry) LS.set("u:"+curWho,{notes,rec,taught,teachAt,attempts});
-  const st2= carry ? {notes,rec,taught,teachAt,attempts} : (LS.get("u:"+nw,null) || {notes:[],rec:{minNotes:null,attempts:null},taught:[],teachAt:0,attempts:0});
-  notes=st2.notes; rec=st2.rec; taught=st2.taught||[]; teachAt=st2.teachAt||0; teachTotal=taught.length; attempts=st2.attempts; curWho=nw;
+  if(!carry) LS.set("u:"+curWho,{notes,rec,taught,teachAt,attempts,torm});
+  const st2= carry ? {notes,rec,taught,teachAt,attempts,torm} : (LS.get("u:"+nw,null) || {notes:[],rec:{minNotes:null,attempts:null},taught:[],teachAt:0,attempts:0});
+  torm=st2.torm||{exams:0,anger:0,wipes:0}; LS.set("torm",torm); notes=st2.notes; rec=st2.rec; taught=st2.taught||[]; teachAt=st2.teachAt||0; teachTotal=taught.length; attempts=st2.attempts; curWho=nw;
   LS.set("notes",notes); LS.set("rec",rec); LS.set("taught",taught); LS.set("teachAt",teachAt); LS.set("attempts",attempts); LS.set("who",nw);
   exam=null; banSel=null; renderNotes(); renderExam();
   setTimeout(restoreFromSheet,0);
@@ -679,7 +685,8 @@ function fbSave(){
       if(rec.minNotes!=null && (mn==null || rec.minNotes<mn || (rec.minNotes===mn && rec.attempts<ma))){ mn=rec.minNotes; ma=rec.attempts; mt=rec.at||Date.now(); }
       const union=[...new Set([...(cur.taught||[]),...taught])];
       const tAt = union.length>(cur.teach||0) ? (teachAt||Date.now()) : (cur.teachAt||0);
-      tx.set(ref,{id:u.id,name:u.name,ban:u.teacher?"교사":u.id[0]+"-"+(+u.id.slice(1,3)),minNotes:mn,minAttempts:ma,minAt:mt,teach:union.length,teachAt:tAt,taught:union,
+      const ct=cur.torm||{}; const tm={exams:Math.max(ct.exams||0,torm.exams||0),anger:Math.max(ct.anger||0,torm.anger||0),wipes:Math.max(ct.wipes||0,torm.wipes||0)};
+      tx.set(ref,{torm:tm,id:u.id,name:u.name,ban:u.teacher?"교사":u.id[0]+"-"+(+u.id.slice(1,3)),minNotes:mn,minAttempts:ma,minAt:mt,teach:union.length,teachAt:tAt,taught:union,
         notes:notes.slice(0,60),attempts,lastScore,lastAt,updated:Date.now()});
     }).catch(e=>console.warn("저장 실패",e));
   },700);
@@ -689,7 +696,7 @@ async function fbRestore(){
   const u=splitWho(who()); if(!fb||!u||notes.length||taught.length) return;
   try{ const d=await fb.collection(FB_COL).doc(u.id).get(); if(!d.exists) return; const r=d.data();
     notes=(r.notes||[]).filter(n=>n&&MATS[n.m]&&ENVS[n.e]); taught=r.taught||[]; teachTotal=taught.length; teachAt=r.teachAt||0;
-    rec={minNotes:r.minNotes??null,attempts:r.minAttempts??null,at:r.minAt||0}; attempts=r.attempts||0;
+    rec={minNotes:r.minNotes??null,attempts:r.minAttempts??null,at:r.minAt||0}; attempts=r.attempts||0; if(r.torm){ torm={exams:Math.max(torm.exams||0,r.torm.exams||0),anger:Math.max(torm.anger||0,r.torm.anger||0),wipes:Math.max(torm.wipes||0,r.torm.wipes||0)}; LS.set("torm",torm); }
     LS.set("notes",notes); LS.set("taught",taught); LS.set("rec",rec); LS.set("attempts",attempts);
     renderNotes(); renderBoards();
     if(notes.length) kid("happy",`${u.name} 박사님! 다른 기기에서 가르쳐 주신 ${notes.length}장면을 다시 떠올렸어요!`);
@@ -723,7 +730,7 @@ async function restoreFromSheet(){
   }catch(e){}
 }
 function hid(name){ let h=2166136261; for(const ch of name){ h^=ch.codePointAt(0); h=Math.imul(h,16777619); } return "u"+(h>>>0).toString(16); }
-function myRow(){ return {name:who(), minNotes:rec.minNotes, attempts:rec.attempts, minAt:rec.at||0, teach:teachTotal, teachAt}; }
+function myRow(){ return {name:who(), minNotes:rec.minNotes, attempts:rec.attempts, minAt:rec.at||0, teach:teachTotal, teachAt, torm}; }
 function saveRecord(){
   LS.set("rec",rec);
   const n=who(); if(!n){ renderBoards(); return; }
@@ -763,6 +770,11 @@ function renderBoards(){
     const mine=full.find(r=>r.name===me), pin = mine && !list.includes(mine);
     return `<table><thead><tr><th class="rk">순위</th><th>이름</th>${cols.map(c=>`<th class="n">${c[0]}</th>`).join("")}${adm?"<th></th>":""}</tr></thead><tbody>${list.map(r=>row(r,cols)).join("")}${pin?`<tr class="gap"><td colspan="${cols.length+2+(adm?1:0)}">⋯ 내 순위 ⋯</td></tr>${row(mine,cols)}`:""}</tbody></table>`;
   };
+  const tormAll=rows.filter(r=>mentalScore(r.torm)>0).map(r=>({...r,_ms:mentalScore(r.torm)})).sort((a,b)=>b._ms-a._ms||String(a.name).localeCompare(String(b.name)));
+  tormAll.forEach((r,i)=>{ const p=tormAll[i-1]; r._rank=(p && p._ms===r._ms) ? p._rank : i+1; });
+  const tormTop=tormAll.filter(r=>r._rank<=10);
+  const colTorm=[["멘붕 지수",r=>`<b>${r._ms}</b> <span class="sm muted">시험 ${r.torm.exams||0}·분노 ${r.torm.anger||0}·지우기 ${r.torm.wipes||0}</span>`]];
+  setTimeout(()=>{ const el=$("boardTorm"); if(el) el.innerHTML=tb(tormTop,tormAll,colTorm); },0);
   const colMin=[["노트 장면",r=>r.minNotes+"장면"],["시험",r=>(r.attempts||"-")+"회"]], colTch=[["가르친 장면",r=>r.teach+" / "+SCENE_MAX]];
   $("boardMin").innerHTML=tb(mins,minsAll,colMin);
   $("boardTeach").innerHTML=tb(tch,tchAll,colTch);
@@ -770,11 +782,11 @@ function renderBoards(){
   const rMin=new Map(minsAll.map(r=>[r.name,r])), rTch=new Map(tchAll.map(r=>[r.name,r]));
   const people=[...new Map(rows.map(r=>[r.name,r])).values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{numeric:true}));
   $("pCount").textContent = people.length ? `참여 ${people.length}명` : "";
-  $("boardAll").innerHTML = people.length ? `<div class="alltable"><table><thead><tr><th>이름</th><th class="n">🎯 쪽집게</th><th class="n">🔥 열정</th>${adm?"<th></th>":""}</tr></thead><tbody>${people.map(r=>{
-      const a=rMin.get(r.name), t=rTch.get(r.name);
+  $("boardAll").innerHTML = people.length ? `<div class="alltable"><table><thead><tr><th>이름</th><th class="n">🎯 쪽집게</th><th class="n">🔥 열정</th><th class="n">😵‍💫 멘붕</th>${adm?"<th></th>":""}</tr></thead><tbody>${people.map(r=>{
+      const a=rMin.get(r.name), t=rTch.get(r.name), tm=tormAll.find(x=>x.name===r.name);
       const cm = a ? `<span class="rkb r${a._rank<=3?a._rank:0}">${a._rank}</span> <span class="sm">${a.minNotes}장면·${a.attempts||"-"}회</span>` : `<span class="sm muted">도전 중</span>`;
       const ct = t ? `<span class="rkb r${t._rank<=3?t._rank:0}">${t._rank}</span> <span class="sm">${t.teach}/${SCENE_MAX}</span>` : `<span class="sm muted">-</span>`;
-      return `<tr class="${r.name===me?"me":""}"><td>${escH(r.name)}</td><td class="n">${cm}</td><td class="n">${ct}</td>${delCell(r)}</tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">아직 기록이 없어요.</div>`;
+      return `<tr class="${r.name===me?"me":""}"><td>${escH(r.name)}</td><td class="n">${cm}</td><td class="n">${ct}</td><td class="n">${tm?`<span class="rkb r${tm._rank<=3?tm._rank:0}">${tm._rank}</span> <span class="sm">${tm._ms}점</span>`:`<span class="sm muted">-</span>`}</td>${delCell(r)}</tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">아직 기록이 없어요.</div>`;
   $("boardAll").hidden = hallView!=="all"; $("hallGrid").hidden = hallView==="all";
   $("viewTabs").querySelectorAll("button").forEach(x=>{ x.setAttribute("aria-pressed",String(x.dataset.v===hallView)); x.onclick=()=>{ hallView=x.dataset.v; renderBoards(); }; });
   setTimeout(()=>{ bindDel(); if(hallView==="all"){ const m=$("boardAll").querySelector("tr.me"); if(m) m.scrollIntoView({block:"nearest"}); } },0);
@@ -870,7 +882,7 @@ async function initHall(){
     $("hallMode").textContent="실시간 기록 서버에 연결하는 중이에요…";
     try{ fb=await initFirebase(); }catch(e){ fb=null; $("hallMode").textContent="실시간 기록 서버에 연결하지 못했어요. 이 기기 기록만 보여요."; renderBoards(); return; }
     fbUnsub=fb.collection(FB_COL).onSnapshot(snap=>{
-      hallRows=snap.docs.map(d=>{const r=d.data(); return {id:d.id,name:dispName(r),minNotes:r.minNotes??null,attempts:r.minAttempts,minAt:r.minAt,teach:r.teach||0,teachAt:r.teachAt};});
+      hallRows=snap.docs.map(d=>{const r=d.data(); return {id:d.id,name:dispName(r),minNotes:r.minNotes??null,attempts:r.minAttempts,minAt:r.minAt,teach:r.teach||0,teachAt:r.teachAt,torm:r.torm||null};});
       $("hallMode").textContent="🔴 실시간 — 다른 박사님의 기록이 바로바로 반영돼요."; renderBoards();
     },e=>{ $("hallMode").textContent="기록을 불러올 권한이 없어요. 선생님께 알려 주세요."; });
     setupAdmin();
@@ -997,7 +1009,7 @@ function renderNotes(){
   $("slotOut").textContent=`${notes.length}장면`;
   if(!notes.length){ $("noteList").innerHTML=`<li class="empty">아직 배운 장면이 없어요.</li>`; return; }
   $("noteList").innerHTML=notes.map((n,i)=>`<li><span>${MATS[n.m].name} · ${ENVS[n.e].T} K → <b class="k-${n.k}">${KN[n.k]}</b></span><button data-i="${i}" aria-label="이 장면 지우기">×</button></li>`).join("");
-  $("noteList").querySelectorAll("button").forEach(b=>b.onclick=()=>{notes.splice(+b.dataset.i,1);LS.set("notes",notes);renderNotes();if(exam){exam=null;renderExam();}});
+  $("noteList").querySelectorAll("button").forEach(b=>b.onclick=()=>{notes.splice(+b.dataset.i,1); bumpTorm("wipes");LS.set("notes",notes);renderNotes();if(exam){exam=null;renderExam();}});
 }
 
 /* ---------- 금쪽이의 판단 (가장 비슷한 장면 떠올리기) ---------- */
@@ -1149,7 +1161,7 @@ let exam=null;
 $("examBtn").onclick=()=>{
   if(!notes.length){ kid("confused","아무것도 안 배웠는데 시험이라니요! 먼저 장면을 보여 주세요."); return; }
   exam=QS.map(runQ);
-  attempts++; LS.set("attempts",attempts);
+  attempts++; LS.set("attempts",attempts); bumpTorm("exams");
   lastScore=exam.filter(r=>r.pick===r.ans).length; lastAt=Date.now(); setTimeout(sheetSave,0);
   renderExam();
   const s=exam.filter(r=>r.pick===r.ans).length, lucky=exam.filter(r=>r.pick===r.ans&&r.guess).length;
@@ -1268,6 +1280,7 @@ async function send(){
   $("msg").value="";
   const hadBad=new RegExp(BAD.source).test(raw);
   const t=mask(raw), angry=hadBad||ANGRY.test(raw);
+  if(angry) bumpTorm("anger");
   anger = angry ? Math.min(100,anger+(hadBad?25:15)) : Math.max(0,anger-5);
   LS.set("anger",anger);
   const prompt = sampleFn ? buildPrompt(t) : null;
@@ -1668,7 +1681,7 @@ function glide(tx){ cancelAnimationFrame(anim); const ty=PIV.y+LEN+SH/2; let las
 $("magR").addEventListener("input",e=>glide(REST+gapOf(+e.target.value)));
 
 /* ---------- 초기화 ---------- */
-armConfirm($("resetAll"),()=>{ notes=[]; LS.set("notes",notes); exam=null; attempts=0; LS.set("attempts",0); st.m=0; st.e=2; st.magnetized=false; sceneChanged(true); renderNotes(); renderExam(); kid("idle","새 학기가 시작됐어요! 자성에 대해 하나도 몰라요."); toast("노트와 시험 결과를 지웠습니다."); });
+armConfirm($("resetAll"),()=>{ if(notes.length) bumpTorm("wipes"); notes=[]; LS.set("notes",notes); exam=null; attempts=0; LS.set("attempts",0); st.m=0; st.e=2; st.magnetized=false; sceneChanged(true); renderNotes(); renderExam(); kid("idle","새 학기가 시작됐어요! 자성에 대해 하나도 몰라요."); toast("노트와 시험 결과를 지웠습니다."); });
 
 renderChips(); renderLabInfo(); renderNotes(); renderExam(); renderChat();
 st.my=PIV.y+LEN+SH/2;
